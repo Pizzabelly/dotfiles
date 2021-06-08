@@ -1,6 +1,6 @@
 #!/bin/bash
 
-_origin_dir=$PWD
+ORIGIN_DIR=$PWD
 
 if [ $EUID != 0 ]; then
     sudo "$0" "$@"
@@ -16,19 +16,19 @@ fi
 shopt -s nullglob
 cd /etc/openvpn/pia
 
-_regions=(*.ovpn)
-index=0
+REGIONS=(*.ovpn)
+INDEX=0
 
-for f in "${_regions[@]}"; do
-  echo $index'. '${_regions[index]}
-  index=$(( index + 1))
+for f in "${REGIONS[@]}"; do
+  echo $INDEX'. '${REGIONS[INDEX]}
+  INDEX=$(( INDEX + 1))
 done
 
-read _selection
+read SELECTION
 
-echo ${_regions[$_selection]}
+echo ${REGIONS[$SELECTION]}
 
-cp "${_regions[$_selection]}" ../openvpn.conf
+cp "${REGIONS[$SELECTION]}" ../openvpn.conf
 cd ..
 
 echo "auth-nocache" >> openvpn.conf
@@ -36,4 +36,4 @@ echo "auth-user-pass login.conf" >> openvpn.conf
 
 rc-service openvpn restart
 
-cd $_origin_dir
+cd $ORIGIN_DIR
