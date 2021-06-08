@@ -1,0 +1,1 @@
+/home/pizza/.config/ncmpcpp/art.sh

@@ -1,0 +1,1 @@
+/home/pizza/.config/nvim/init.vim
