@@ -1,1 +1,137 @@
-/home/pizza/.config/waybar/style.css
+@import "colors.css";
+
+* {
+    border: none;
+    border-radius: 0;
+    font-family: JetBrainsMono Nerd Font;
+    font-size: 13px;
+}
+
+window#waybar {
+    background-color: @bg;
+    border-bottom: 2px solid @c3;
+    color: @fg;
+    transition-property: background-color;
+    transition-duration: .5s;
+}
+
+#workspaces button {
+    padding: 0 0px;
+    background-color: transparent;
+    color: @fg;
+    border-bottom: 4px solid transparent;
+}
+
+#workspaces button.focused {
+    background: @c1;
+    border-bottom: 4px solid @c3;
+}
+
+#workspaces button:hover {
+    background: rgba(0, 0, 0, 0.2);
+    box-shadow: inherit;
+    border-bottom: 4px solid @c3;
+}
+
+#clock,
+#battery,
+#cpu,
+#memory,
+#temperature,
+#backlight,
+#network,
+#pulseaudio,
+#custom-media,
+#mode,
+#idle_inhibitor,
+#tray {
+    margin: 0 3px 0 5px;
+}
+#window {
+    background-color: @c2;
+    border-bottom: 2px solid @c3;
+}
+#clock {
+    background-color: @c2;
+    border-bottom: 2px solid @c3;
+}
+#battery {
+    background-color: @fg;
+    color: #000000;
+    border-bottom: 2px solid @c3;
+}
+
+#battery.charging {
+    color: @fg;
+    background-color: #26A65B;
+    border-bottom: 2px solid @c3;
+}
+
+@keyframes blink {
+    to {
+        background-color: @fg;
+        color: #000000;
+    }
+}
+
+#battery.critical:not(.charging) {
+    background-color: #f53c3c;
+    color: @fg;
+    animation-name: blink;
+    animation-duration: 0.5s;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
+
+label:focus {
+    background-color: #000000;
+}
+
+#cpu {
+    padding: 0px;
+    background-color: @c1;
+    color: @fg;
+    border-bottom: 2px solid @c3;
+}
+
+#memory {
+    padding: 0px;
+    background-color: @c1;
+    color: @fg;
+    border-bottom: 2px solid @c3;
+}
+
+#backlight {
+    background-color: @c2;
+    border-bottom: 2px solid @c3;
+}
+
+#network {
+    padding: 0px;
+    background-color: @c2;
+    border-bottom: 2px solid @c3;
+}
+
+#network.disconnected {
+    background-color: @c1;
+    border-bottom: 2px solid @c3;
+}
+
+#temperature {
+    padding: 0px;
+    background-color: @c1;
+    border-bottom: 2px solid @c3;
+}
+
+#temperature.critical {
+    padding: 0px;
+    background-color: #eb4d4b;
+    border-bottom: 2px solid @c3;
+}
+
+#tray {
+    padding: 0px;
+    background-color: @c1;
+    border-bottom: 2px solid @c3;
+}

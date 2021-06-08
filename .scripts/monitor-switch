@@ -1,1 +1,13 @@
-/home/pizza/.scripts/monitor-switch
+#!/bin/bash
+
+if [ "$1" == "windows" ]
+then
+    ddccontrol -r 0x60 -w 17 dev:/dev/i2c-5
+fi
+
+if [ "$1" == "linux" ]
+then
+    ddccontrol -r 0x60 -w 15 dev:/dev/i2c-5
+fi
+
+

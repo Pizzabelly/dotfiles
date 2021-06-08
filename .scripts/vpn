@@ -1,1 +1,39 @@
-/home/pizza/.scripts/vpn
+#!/bin/bash
+
+_origin_dir=$PWD
+
+if [ $EUID != 0 ]; then
+    sudo "$0" "$@"
+    exit $?
+fi
+
+if [[ $1 == "stop" ]]
+then
+    /etc/init.d/openvpn stop
+    exit
+fi
+
+shopt -s nullglob
+cd /etc/openvpn/pia
+
+_regions=(*.ovpn)
+index=0
+
+for f in "${_regions[@]}"; do
+  echo $index'. '${_regions[index]}
+  index=$(( index + 1))
+done
+
+read _selection
+
+echo ${_regions[$_selection]}
+
+cp "${_regions[$_selection]}" ../openvpn.conf
+cd ..
+
+echo "auth-nocache" >> openvpn.conf
+echo "auth-user-pass login.conf" >> openvpn.conf
+
+rc-service openvpn restart
+
+cd $_origin_dir

@@ -1,1 +1,12 @@
-/home/pizza/.scripts/dmenu-colored
+#!/bin/bash
+
+PATH=$PATH:$HOME/.scripts
+
+if [[ $XDG_SESSION_TYPE == 'wayland' ]]
+then
+  dmenu_path | wofi --dmenu | ${SHELL:-"/bin/sh"} &
+else
+  dmenu_run -sb `xgetres color1` -nb `xgetres background`
+fi
+
+

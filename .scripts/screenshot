@@ -1,1 +1,40 @@
-/home/pizza/.scripts/screenshot
+#!/bin/bash
+DIR="$HOME/pics/screenshots/`date +'%m-%Y'`"
+
+if [ ! -d $DIR ]
+then
+  mkdir -p $DIR
+fi
+
+MONITOR="DP-1"
+
+while : ; do
+  FILENAME="screenshot-`date +'%m-%d-%y'`-`hexdump -n 3 -e '1/4 "%02X"' /dev/random`.png"
+  [[ -f $DIR/$FILENAME ]] || break
+done
+
+if [[ $XDG_SESSION_TYPE == 'wayland' ]]
+then
+  COPY_CMD='wl-copy -t image/png'
+  if [[ $1 == 'full' ]]
+  then
+    grim -o $MONITOR $DIR/$FILENAME
+  else
+    grim -g "$(slurp)" $DIR/$FILENAME
+  fi
+else
+  COPY_CMD='xclip -selection clipboard -target image/png -i'
+  if [[ $1 == 'full' ]]
+  then
+    import -window root $DIR/$FILENAME
+  else
+    area=$(slop -f "%g") || exit 1
+    read -r G < <(echo $area)
+    import -window root -crop $G $DIR/$FILENAME
+  fi
+fi
+
+if [[ -f $DIR/$FILENAME ]]
+then
+  cat $DIR/$FILENAME | $COPY_CMD
+fi

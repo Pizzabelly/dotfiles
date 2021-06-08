@@ -1,1 +1,16 @@
-/home/pizza/.scripts/anime-gif-mpv
+#!/bin/bash
+
+RES=$(magick identify $1 | awk '{ print $3 }' | head -n1)
+
+WIDTH=$(echo $RES | awk '{ split($0, a, "x"); print a[1] }')
+HEIGHT=$(echo $RES | awk '{ split($0, a, "x"); print a[2] }')
+
+PADDING=10
+
+MONITOR_WIDTH=2560
+MONITOR_HEIGHT=1440
+
+WINDOW_X=$(echo "$MONITOR_WIDTH - ($PADDING + $WIDTH)" | bc)
+WINDOW_Y=$(echo "$MONITOR_HEIGHT - ($PADDING + $WIDTH)" | bc)
+
+mpv --loop --alpha --osc=no --geometry=$WINDOW_X:$WINDOW_Y $1

@@ -1,1 +1,37 @@
-/home/pizza/.config/wofi/style.css
+@import "colors.css";
+
+#input {
+    margin: 0px;
+    border: 0px solid @bg;
+    background-color: @bg;
+}
+
+#inner-box {
+    margin: 0px;
+    border: 0px solid @bg;
+    background-color: @bg;
+}
+
+#outer-box {
+    margin: 0px;
+    border: 0px solid @bg;
+    background-color: @bg;
+}
+
+#scroll {
+    margin: 0px;
+    border: 0px solid @bg;
+    background-color: @bg;
+}
+
+#text {
+    margin: 0px 2px 0px 2px;
+    color: @fg;
+    font: JetBrainsMono Nerd Font;
+    font-size: 13px;
+}
+
+#text:selected {
+    background-color: @fg;
+    color: @bg;
+}

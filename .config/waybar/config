@@ -1,1 +1,53 @@
-/home/pizza/.config/waybar/config
+{
+    "layer": "top",
+    "position": "top",
+    "height": 24,
+    "modules-left": ["sway/workspaces"],
+    //"modules-center": ["sway/window"],
+    "modules-center": [],
+    "modules-right": ["network", "cpu", "temperature", "memory", "clock"],
+    "tray": {
+        "icon-size": 16,
+        "spacing": 2
+    },
+    "clock": {
+        "format": "/ {:%r} ",
+        "format-alt": "/ {:%A, %B %d, %Y, %r} "
+    },
+    "cpu": {
+        "format": "/ cpu: {usage}%,",
+        "tooltip": false
+    },
+    "memory": {
+        "format": "/ mem: {}%"
+    },
+    "temperature": {
+        "hwmon-path": "/sys/class/hwmon/hwmon0/temp2_input",
+        "critical-threshold": 80,
+        "format-critical": "{temperatureC}°C",
+        "format": "{temperatureC}°C",
+    },
+    //"backlight": {
+    //    // "device": "acpi_video1",
+    //    "format": "backlight: {percent}%",
+    //},
+    "battery": {
+        "states": {
+            "warning": 30,
+            "critical": 15
+        },
+        "format": "/ {capacity}%",
+        "format-charging": "/ {capacity}%",
+        "format-plugged": "/ {capacity}%",
+        "format-alt": "/ {time}",
+    },
+    "network": {
+        "format-wifi": "{essid} ({signalStrength}%)",
+        "format-ethernet": "ip: {ipaddr}",
+        "format-linked": "{ifname} (No IP)",
+        "format-disconnected": "disconnected"
+    },
+    "sway/window": {
+        "max-length": 50
+    }
+}

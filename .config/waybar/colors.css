@@ -1,1 +1,5 @@
-/home/pizza/.config/waybar/colors.css
+@define-color bg #221b19;
+@define-color fg #c7c6c5;
+@define-color c1 @bg;
+@define-color c2 @bg;
+@define-color c3 #c19489;

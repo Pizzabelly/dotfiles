@@ -1,1 +1,44 @@
-/home/pizza/.config/ncmpcpp/config
+mpd_music_dir = ~/music
+
+#### Cover art
+execute_on_song_change="~/.config/ncmpcpp/art.sh"
+
+#### Playlist formatting
+song_list_format = "$6{%a -$4 %t $/r$/u$R$b$0%l$/b  }|{%f$/r}"
+now_playing_prefix = "$b$6 > "
+now_playing_suffix = "$/b"
+playlist_display_mode = "classic"
+
+song_columns_list_format = "(50)[6]{t} (50)[4]{ar} $b(5f)[9]{lr}$/b"
+
+#### General formatting
+titles_visibility = "no"
+header_visibility = "no"
+statusbar_visibility = "no"
+display_bitrate = "yes"
+playlist_show_remaining_time = yes
+user_interface = alternative
+current_item_prefix = $(16)$r
+current_item_suffix = $/r$(end)
+
+#### Misc stuff
+discard_colors_if_item_is_selected = "yes"
+autocenter_mode = "yes"
+centered_cursor = "yes"
+lastfm_preferred_language = "ja"
+song_window_title_format = ncmpcpp
+ask_before_clearing_playlists = "yes"
+volume_change_step = "1"
+
+#### Visualizer stuff
+visualizer_type = wave_filled
+visualizer_data_source = "/tmp/mpd.fifo"
+visualizer_in_stereo = "no"
+
+visualizer_look = "  "
+startup_screen = visualizer
+startup_slave_screen_focus = yes
+startup_slave_screen = playlist
+locked_screen_width_part = 30
+
+browser_display_mode = columns
