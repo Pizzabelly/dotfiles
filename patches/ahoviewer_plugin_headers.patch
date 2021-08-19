@@ -1,0 +1,196 @@
+diff --git a/src/booru/curler.cc b/src/booru/curler.cc
+index bc71d6e..d18cd60 100644
+--- a/src/booru/curler.cc
++++ b/src/booru/curler.cc
+@@ -147,6 +147,20 @@ void Curler::set_share_handle(CURLSH* s) const
+     curl_easy_setopt(m_EasyHandle, CURLOPT_SHARE, s);
+ }
+ 
++void Curler::set_headers(const std::vector<std::string>& headers) {
++    reset_headers();
++    for (auto& header : headers) {
++        m_Headers = curl_slist_append(m_Headers, header.c_str());
++    }
++}
++
++void Curler::reset_headers() {
++    if (m_Headers) {
++        curl_slist_free_all(m_Headers);
++        m_Headers = nullptr;
++    }
++}
++
+ std::string Curler::escape(const std::string& str) const
+ {
+     std::string r;
+@@ -166,6 +180,8 @@ bool Curler::perform()
+     m_Cancel->reset();
+     clear();
+ 
++    curl_easy_setopt(m_EasyHandle, CURLOPT_HTTPHEADER, m_Headers);
++
+     return curl_easy_perform(m_EasyHandle) == CURLE_OK;
+ }
+ 
+diff --git a/src/booru/curler.h b/src/booru/curler.h
+index c0e5b9f..6416bc5 100644
+--- a/src/booru/curler.h
++++ b/src/booru/curler.h
+@@ -29,6 +29,8 @@ namespace AhoViewer::Booru
+         void set_cookie_file(const std::string& path) const;
+         void set_post_fields(const std::string& fields) const;
+         void set_share_handle(CURLSH* s) const;
++        void set_headers(const std::vector<std::string>& headers);
++        void reset_headers();
+ 
+         std::string escape(const std::string& str) const;
+         bool perform();
+@@ -79,6 +81,7 @@ namespace AhoViewer::Booru
+ 
+         CURL* m_EasyHandle;
+         CURLcode m_Response;
++        struct curl_slist* m_Headers{ nullptr };
+         std::string m_Url;
+         std::vector<unsigned char> m_Buffer;
+ 
+diff --git a/src/booru/page.cc b/src/booru/page.cc
+index 10574f1..325984c 100644
+--- a/src/booru/page.cc
++++ b/src/booru/page.cc
+@@ -321,10 +321,13 @@ void Page::get_posts()
+ 
+         m_Curler.set_url(m_Site->get_posts_url(tags, m_Page));
+ 
+-        if (m_Site->get_type() == Type::GELBOORU)
++        if (m_Site->get_type() == Type::PLUGIN) {
++            m_Curler.set_headers(m_Site->get_plugin_headers());
++        } else if (m_Site->get_type() == Type::GELBOORU) {
+             m_Curler.set_cookie_file(m_Site->get_cookie());
+-        else
++        } else {
+             m_Curler.set_http_auth(m_Site->get_username(), m_Site->get_password());
++        }
+ 
+         bool success{ false };
+         size_t retry_count{ 0 };
+@@ -353,6 +356,10 @@ void Page::get_posts()
+ 
+         if (!m_Curler.is_cancelled())
+             m_SignalPostsDownloaded();
++
++        if (m_Site->get_type() == Type::PLUGIN) {
++            m_Curler.reset_headers();
++        }
+     });
+ 
+     m_SignalPostsDownloadStarted();
+diff --git a/src/booru/site.h b/src/booru/site.h
+index 277e82c..25caef3 100644
+--- a/src/booru/site.h
++++ b/src/booru/site.h
+@@ -46,6 +46,8 @@ namespace AhoViewer::Booru
+ #ifdef HAVE_LIBPEAS
+         std::string get_plugin_name() const { return m_Plugin ? m_Plugin->get_name() : ""; }
+         void set_plugin(std::shared_ptr<Plugin::SitePlugin> p) { m_Plugin = std::move(p); }
++
++        std::vector<std::string> get_plugin_headers() const { return m_Plugin->get_headers(); }
+ #endif // HAVE_LIBPEAS
+ 
+         // At the moment this can only be controlled by plugins (no built in site type seems to have
+diff --git a/src/plugin/siteactivatable.c b/src/plugin/siteactivatable.c
+index 3b2be46..d0286f1 100644
+--- a/src/plugin/siteactivatable.c
++++ b/src/plugin/siteactivatable.c
+@@ -340,6 +340,32 @@ const gchar* ahoviewer_site_activatable_get_icon_url(AhoviewerSiteActivatable* a
+     return url;
+ }
+ 
++/**
++ * ahoviewer_site_activatable_get_headers:
++ * @activatable: A #AhoviewerSiteActivatable.
++ *
++ * Returns: (element-type utf8) (transfer full): Array of headers, should be freed with
++ *   g_ptr_array_unref.
++ */
++GPtrArray* ahoviewer_site_activatable_get_headers(AhoviewerSiteActivatable* activatable) {
++    AhoviewerSiteActivatableInterface* iface;
++
++    g_return_val_if_fail(AHOVIEWER_IS_SITE_ACTIVATABLE(activatable), NULL);
++
++    iface = AHOVIEWER_SITE_ACTIVATABLE_GET_IFACE(activatable);
++    if (G_LIKELY(iface->get_headers))
++    {
++        GPtrArray* headers = iface->get_headers(activatable);
++
++        if (G_LIKELY(headers)) // is this right?
++            g_ptr_array_set_free_func(headers, (GDestroyNotify)g_free);
++
++        return headers;
++    }
++
++    return NULL;
++}
++
+ /**
+  * ahoviewer_site_activatable_parse_post_data:
+  * @activatable: A #AhoviewerSiteActivatable.
+diff --git a/src/plugin/siteactivatable.h b/src/plugin/siteactivatable.h
+index 3fe8592..4cb439f 100644
+--- a/src/plugin/siteactivatable.h
++++ b/src/plugin/siteactivatable.h
+@@ -107,6 +107,7 @@ struct _AhoviewerSiteActivatableInterface
+     const gchar* (*get_posts_uri)(AhoviewerSiteActivatable* activatable, const gchar* tags, size_t page, size_t limit);
+     const gchar* (*get_register_url)(AhoviewerSiteActivatable* activatable, const gchar* url);
+     const gchar* (*get_icon_url)(AhoviewerSiteActivatable* activatable, const gchar* url);
++    GPtrArray* (*get_headers)(AhoviewerSiteActivatable* activatable);
+     AhoviewerPosts* (*parse_post_data)(AhoviewerSiteActivatable* activatable, const unsigned char* data, const size_t size, const gchar* url, const gboolean samples);
+     GPtrArray* (*parse_note_data)(AhoviewerSiteActivatable* activatable, const unsigned char* data, const size_t size);
+ };
+@@ -125,6 +126,9 @@ const gchar* ahoviewer_site_activatable_get_register_url(AhoviewerSiteActivatabl
+ AHOVIEWER_EXPORT
+ const gchar* ahoviewer_site_activatable_get_icon_url(AhoviewerSiteActivatable* activatable, const gchar* url);
+ 
++AHOVIEWER_EXPORT
++GPtrArray* ahoviewer_site_activatable_get_headers(AhoviewerSiteActivatable* activatable);
++
+ AHOVIEWER_EXPORT
+ AhoviewerPosts* ahoviewer_site_activatable_parse_post_data(
+     AhoviewerSiteActivatable* activatable, const unsigned char* data, const size_t size, const gchar* url, const gboolean samples);
+diff --git a/src/plugin/siteplugin.cc b/src/plugin/siteplugin.cc
+index 0c64ce2..350d695 100644
+--- a/src/plugin/siteplugin.cc
++++ b/src/plugin/siteplugin.cc
+@@ -41,6 +41,21 @@ std::string SitePlugin::get_icon_url(const std::string& url) const
+     return null_check_string(ahoviewer_site_activatable_get_icon_url(m_Activatable, url.c_str()));
+ }
+ 
++std::vector<std::string> SitePlugin::get_headers() const {
++    GPtrArray* plugin_headers{ ahoviewer_site_activatable_get_headers(m_Activatable) };
++
++    std::vector<std::string> headers;
++
++    if (plugin_headers) {
++        for (guint i = 0; i < plugin_headers->len; ++i) {
++            headers.push_back(static_cast<gchar*>(plugin_headers->pdata[i]));
++        }
++        g_ptr_array_unref(plugin_headers);
++    }
++
++    return headers;
++}
++
+ std::tuple<std::vector<PostDataTuple>, size_t, std::string>
+ SitePlugin::parse_post_data(const unsigned char* data,
+                             const size_t size,
+diff --git a/src/plugin/siteplugin.h b/src/plugin/siteplugin.h
+index 4f39cc7..948a7a5 100644
+--- a/src/plugin/siteplugin.h
++++ b/src/plugin/siteplugin.h
+@@ -21,6 +21,7 @@ namespace AhoViewer::Plugin
+         std::string get_posts_uri(const std::string& tags, size_t page, size_t limit) const;
+         std::string get_register_url(const std::string& tags) const;
+         std::string get_icon_url(const std::string& url) const;
++        std::vector<std::string> get_headers() const;
+ 
+         std::tuple<std::vector<Booru::PostDataTuple>, size_t, std::string>
+         parse_post_data(const unsigned char* data,

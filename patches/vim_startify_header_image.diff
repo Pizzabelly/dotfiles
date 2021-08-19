@@ -1,0 +1,137 @@
+diff --git a/autoload/startify.vim b/autoload/startify.vim
+index 3b9867a..90125f9 100644
+--- a/autoload/startify.vim
++++ b/autoload/startify.vim
+@@ -84,9 +84,20 @@ function! startify#insane_in_the_membrane(on_vimenter) abort
+   endif
+ 
+   " Must be global so that it can be read by syntax/startify.vim.
+-  let g:startify_header = exists('g:startify_custom_header')
+-        \ ? s:set_custom_section(g:startify_custom_header)
+-        \ : (exists('*strwidth') ? startify#pad(startify#fortune#cowsay()) : [])
++  if exists('g:startify_header_image')
++    let g:startify_header = []
++    let t = 0
++    let end = float2nr(startify#kitty#image_height(g:startify_header_image) / g:startify_font_height)
++    while t < end
++      call add(g:startify_header, ' ')
++      let t += 1
++    endwhile
++    call startify#kitty#display_image(g:startify_header_image)
++  elseif exists('g:startify_custom_header')
++    let g:startify_header = s:set_custom_section(g:startify_custom_header)
++  else
++    let g:startify_header = (exists('*strwidth')) ? startify#pad(startify#fortune#cowsay()) : []
++  endif
+   if !empty(g:startify_header)
+     let g:startify_header += ['']  " add blank line
+   endif
+@@ -570,6 +581,10 @@ function! s:display_by_path(path_prefix, path_format, use_env) abort
+ 
+     for [absolute_path, entry_path] in oldfiles
+       let index = s:get_index_as_string()
++      let entry_len = strlen(entry_path)
++      if entry_len > g:startify_filename_max_len
++        let entry_path = '...' . entry_path[entry_len - (g:startify_filename_max_len - 1):]
++      endif
+       call append('$', eval(entry_format))
+       if has('win32')
+         let absolute_path = substitute(absolute_path, '\[', '\[[]', 'g')
+@@ -1108,7 +1123,6 @@ function! s:init_env()
+   function! s:compare_by_val_len(foo, bar)
+     return len(a:bar[1]) - len(a:foo[1])
+   endfunction
+-
+   let s:env = sort(s:env, 's:compare_by_key_len')
+   let s:env = sort(s:env, 's:compare_by_val_len')
+ endfunction
+@@ -1167,7 +1181,27 @@ let g:startify_skiplist = extend(get(g:, 'startify_skiplist', []), [
+       \ escape(fnamemodify(resolve($VIMRUNTIME), ':p'), '\') .'doc/.*\.txt$',
+       \ ], 'keep')
+ 
+-let g:startify_padding_left = get(g:, 'startify_padding_left', 3)
++
++if exists('g:startify_header_image')
++  " Copied from s:show_files(), this needs to run before s:show_files()
++  " because it affects other lists.
++  let oldfiles = call(get(g:, 'startify_enable_unsafe') ? 's:filter_oldfiles_unsafe' : 's:filter_oldfiles',
++        \ ['', g:startify_relative_path, get(g:, 'startify_use_env')])
++  let max_len = 0
++  for [absolute_path, entry_path] in oldfiles
++    let entry_len = strlen(entry_path)
++    if entry_len > g:startify_filename_max_len
++      let max_len = g:startify_filename_max_len + strlen('...')
++      break
++    endif
++    if entry_len > max_len
++      let max_len = entry_len
++    endif
++  endfor
++  let g:startify_padding_left = float2nr(&columns / 2.0) - (max_len / 2)
++else
++  let g:startify_padding_left = get(g:, 'startify_padding_left', 3)
++endif
+ let s:leftpad = repeat(' ', g:startify_padding_left)
+ let s:fixed_column = g:startify_padding_left + 2
+ let s:batchmode = ''
+diff --git a/autoload/startify/kitty.vim b/autoload/startify/kitty.vim
+new file mode 100644
+index 0000000..2e94f89
+--- /dev/null
++++ b/autoload/startify/kitty.vim
+@@ -0,0 +1,55 @@
++python3 << endpy
++import vim
++from base64 import standard_b64encode
++
++def serialize_gr_command(cmd, payload=None):
++   cmd = ','.join('{}={}'.format(k, v) for k, v in cmd.items())
++   ans = []
++   w = ans.append
++   w(b'\033_G'), w(cmd.encode('ascii'))
++   if payload:
++      w(b';')
++      w(payload)
++   w(b'\033\\')
++   return b''.join(ans)
++
++def write_chunked(cmd, data):
++   buf = b''
++
++   data = standard_b64encode(data)
++   while data:
++      chunk, data = data[:4096], data[4096:]
++      m = 1 if data else 0
++      cmd['m'] = m
++      buf += serialize_gr_command(cmd, chunk)
++
++   return buf
++
++def kitty_image_cmd(filename):
++  return write_chunked({'a': 'T', 'f': 100, 'C': 1}, open(filename, 'rb').read())
++
++def kitty_delete_cmd():
++  return serialize_gr_command({'a': 'd', 'd': 'a'})
++endpy
++
++function! startify#kitty#image_width(file)
++    return str2nr(system("identify -format '%w' " . a:file))
++endfunction
++
++function! startify#kitty#image_height(file)
++    return str2nr(system("identify -format '%h' " . a:file))
++endfunction
++
++function! startify#kitty#display_image(file)
++  let pad_left = float2nr((&columns / 2.0) - ((startify#kitty#image_width(g:startify_header_image) / 2.0) / g:startify_font_width))
++  call writefile([repeat(' ', pad_left)], '/dev/tty', 'b')
++  call writefile([py3eval("kitty_image_cmd('" . a:file . "')")], '/dev/tty', 'b')
++  echo ''
++endfunction
++
++function! startify#kitty#delete_image()
++  call writefile([py3eval("kitty_delete_cmd()")], '/dev/tty', 'b')
++endfunction
++
++autocmd BufEnter * if !exists('b:has_been_entered') |
++     \ let b:has_been_entered = 1 | call startify#kitty#delete_image() | endif

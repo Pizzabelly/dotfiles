@@ -21,14 +21,25 @@ let g:startify_font_width  = 10.0
 
 let g:startify_header_image = '/home/pizza/pics/emacs-start.png'
 
+let g:startify_filename_max_len = 50
+
 let g:startify_lists = [
       \ { 'type': 'files', 'header': [] },
       \ ]
 
 call plug#begin('~/.vim/plugged')
     Plug 'dylanaraps/wal.vim'
-    Plug 'file://'.expand('~/c/contrib/vim-startify')
-"    Plug 'mhinz/vim-startify'
+    Plug 'mhinz/vim-startify', { 'commit': '81e36c3' }
+    Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' }
+    Plug 'neovim/nvim-lspconfig'
 call plug#end()
+
+let g:deoplete#enable_at_startup = 1
+" deoplete tab-complete
+inoremap <expr><tab> pumvisible() ? "\<c-n>" : "\<tab>"
+
+lua << EOF
+require'lspconfig'.clangd.setup{}
+EOF
 
 colo wal
