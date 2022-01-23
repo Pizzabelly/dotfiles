@@ -1,0 +1,440 @@
+:root {{
+    --dark0:  {background};
+    --dark1:  {background.lighten(5)};
+    --dark2:  {background.darken(5)};
+    --dark3:  {background.darken(10)};
+
+    --light0: {foreground};
+    --light1: {foreground.lighten(5)};
+    --light2: {foreground.darken(5)};
+    --light3: {foreground.darken(10)};
+
+    --frost0: {color5.saturate(75)};
+    --frost1: {color5.saturate(65)};
+    --frost2: {color5.saturate(55)};
+    --frost3: {color5.saturate(45)};
+
+    --red:    {color1};
+    --orange: {color2};
+    --yellow: {color3};
+    --green:  {color4};
+    --purple: {color5};
+}}
+
+:root {{
+    --default-font: "Inter", sans-serif;
+    --editor-font: "Jetbrains Mono", monospace;
+}}
+
+.theme-light,
+.theme-dark {{
+    --background-primary:         var(--dark0);
+    --background-primary-alt:     var(--dark0);
+    --background-secondary:       var(--dark1);
+    --background-secondary-alt:   var(--dark2);
+    --background-modifier-form-field: rgba(0, 0, 0, 0.3);
+    --background-modifier-form-field-highlighted: rgba(0, 0, 0, 0.22);
+    --background-modifier-box-shadow: rgba(0, 0, 0, 0.3);
+    --background-modifier-success: var(--green); 
+    --background-modifier-error:  var(--red);
+    --background-modifier-error-rgb: {color1.rgb}; /* red */
+    --background-modifier-error-hover: var(--red);
+    --background-modifier-cover:  rgba(0, 0, 0, 0.8);
+    --text-normal:                var(--light2);
+    --text-faint:                 var(--light0);
+    --text-muted:                 var(--light1);
+    --text-muted-rgb:             {foreground.lighten(5).rgb}; /* light1 */
+    --text-title-h1:              var(--red);
+    --text-title-h2:              var(--orange);
+    --text-title-h3:              var(--yellow);
+    --text-title-h4:              var(--green);
+    --text-title-h5:              var(--purple);
+    --text-title-h6:              var(--orange);
+    --text-link:                  var(--frost0);
+    --text-a:                     var(--frost3);
+    --text-a-hover:               var(--frost2);
+    --text-mark:                  rgba({color5.saturate(65).rgb}, 0.3); /* frost1 */
+    --text-error:                 var(--red); 
+    --text-error-hover:           var(--red);
+    --text-on-accent:             var(--light2);
+    --pre-code:                   var(--dark1);
+    --text-highlight-bg:          var(--red);
+    --text-highlight-bg-active:   var(--green);
+    --interactive-accent:         var(--frost0);
+    --interactive-accent-hover:   var(--frost0);
+    --interactive-before:         var(--dark3);
+    --interactive-success:        var(--green);
+    --background-modifier-border: var(--dark2);
+    --text-accent:                var(--orange);
+    --text-accent-hover:          var(--orange);
+    --interactive-accent-rgb:     {color2.rgb};
+    --interactive-normal:         var(--dark1);
+    --interactive-hover:          var(--dark1);
+    --inline-code:                var(--frost1);
+    --code-block:                 var(--frost1);
+    --vim-cursor:                 var(--orange);
+    --text-selection:             var(--dark3);
+    --text-tag:                   var(--frost0);
+    --task-checkbox:              var(--frost0);
+    --scrollbar-active-thumb-bg:  rgba(255, 255, 255, 0.2);
+    --scrollbar-bg:               rgba(255, 255, 255, 0.05);
+    --scrollbar-thumb-bg:         rgba(255, 255, 255, 0.1);
+    --highlight-mix-blend-mode:   lighten;
+}}
+
+.markdown-source-view {{
+  font-family: var(--editor-font);
+}}
+
+.markdown-preview-view {{
+  font-family: var(--default-font);
+}}
+
+.theme-dark code[class*="language-"],
+.theme-dark pre[class*="language-"],
+.theme-light code[class*="language-"],
+.theme-light pre[class*="language-"] {{
+    text-shadow: none !important;
+    background-color: var(--pre-code) !important;
+}}
+
+.graph-view.color-circle,
+.graph-view.color-fill-highlight,
+.graph-view.color-line-highlight {{
+    color: var(--interactive-accent-rgb) !important;
+}}
+.graph-view.color-text {{
+    color: var(--text-a-hover) !important;
+}}
+
+html,
+body {{
+}}
+
+strong {{
+    font-weight: 600 !important;
+}}
+
+a,
+.cm-hmd-internal-link {{
+    color: var(--text-a) !important;
+    text-decoration: none !important;
+}}
+
+a:hover,
+.cm-hmd-internal-link:hover,
+.cm-url {{
+    color: var(--text-a-hover) !important;
+    text-decoration: none !important;
+}}
+
+a.tag, a.tag:hover {{
+  color: var(--text-tag) !important;
+  background-color: var(--background-secondary-alt);
+  padding: 2px 4px;
+  border-radius: 4px;
+}}
+
+mark {{
+    background-color: var(--text-mark);
+}}
+
+.titlebar {{
+  background-color: var(--background-secondary-alt);
+}}
+
+.titlebar-inner {{
+  color: var(--text-normal);
+}}
+
+.view-actions a {{
+    color: var(--text-normal) !important;
+}}
+
+.view-actions a:hover {{
+    color: var(--text-a) !important;
+}}
+
+.HyperMD-codeblock-bg {{
+    background-color: var(--pre-code) !important;
+}}
+
+.HyperMD-codeblock {{
+    line-height: 1.4em !important;
+    color: var(--code-block) !important;
+}}
+
+.HyperMD-codeblock-begin {{
+    border-top-left-radius: 4px !important;
+    border-top-right-radius: 4px !important;
+}}
+
+.HyperMD-codeblock-end {{
+    border-bottom-left-radius: 4px !important;
+    border-bottom-right-radius: 4px !important;
+}}
+
+th {{
+    font-weight: 600 !important;
+}}
+
+thead {{
+    border-bottom: 2px solid var(--background-modifier-border) !important;
+}}
+
+.HyperMD-table-row {{
+    line-height: normal !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+}}
+
+.HyperMD-table-row-0 {{
+}}
+
+.nav-file-tag {{
+    color: var(--text-a) !important;
+}}
+
+.is-active .nav-file-title {{
+    color: var(--text-a) !important;
+    background-color: var(--background-primary-alt) !important;
+}}
+
+.nav-file-title {{
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+}}
+
+.HyperMD-list-line {{
+    padding-top: 0 !important;
+}}
+
+.cm-hashtag {{
+    color: var(--text-tag) !important;
+}}
+
+.search-result-file-matched-text {{
+    color: var(--light3) !important;
+}}
+
+.markdown-preview-section pre code,
+.markdown-preview-section code {{
+    font-size: 0.9em !important;
+    background-color: var(--pre-code) !important;
+}}
+
+.markdown-preview-section pre code {{
+    padding: 4px !important;
+    line-height: 1.4em !important;
+    display: block !important;
+    color: var(--code-block) !important;
+}}
+
+.markdown-preview-section code {{
+    color: var(--inline-code) !important;
+}}
+
+.cm-s-obsidian,
+.cm-inline-code {{
+    -webkit-font-smoothing: auto !important;
+}}
+
+.cm-inline-code {{
+    color: var(--inline-code) !important;
+    background-color: var(--pre-code) !important;
+    padding: 1px !important;
+}}
+
+.workspace-leaf-header-title {{
+    font-weight: 600 !important;
+}}
+
+.side-dock-title {{
+    padding-top: 15px !important;
+    font-size: 20px !important;
+}}
+
+.side-dock-ribbon-tab:hover,
+.side-dock-ribbon-action:hover,
+.side-dock-ribbon-action.is-active:hover,
+.nav-action-button:hover,
+.side-dock-collapse-btn:hover {{
+    color: var(--text-a);
+}}
+
+.side-dock {{
+    border-right: 0 !important;
+}}
+
+.cm-s-obsidian,
+.markdown-preview-view {{
+    /* padding-left: 10px !important; */
+    padding-right: 10px !important;
+}}
+
+/* vertical resize-handle */
+.workspace-split.mod-vertical > * > .workspace-leaf-resize-handle,
+.workspace-split.mod-left-split > .workspace-leaf-resize-handle,
+.workspace-split.mod-right-split > .workspace-leaf-resize-handle {{
+    width: 1px !important;
+    background-color: var(--background-secondary-alt);
+}}
+
+/* horizontal resize-handle */
+.workspace-split.mod-horizontal > * > .workspace-leaf-resize-handle {{
+    height: 1px !important;
+    background-color: var(--background-secondary-alt);
+}}
+
+/* Remove vertical split padding */
+.workspace-split.mod-root .workspace-split.mod-vertical .workspace-leaf-content,
+.workspace-split.mod-vertical > .workspace-split,
+.workspace-split.mod-vertical > .workspace-leaf,
+.workspace-tabs {{
+    padding-right: 0px;
+}}
+
+.markdown-embed-title {{
+    font-weight: 600 !important;
+}}
+
+.markdown-embed {{
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    margin-left: 10px !important;
+    margin-right: 10px !important;
+}}
+
+.cm-header-1,
+.markdown-preview-section h1 {{
+    font-weight: 500 !important;
+    font-size: 2.2em !important;
+    color: var(--text-title-h1) !important;
+}}
+
+.cm-header-2,
+.markdown-preview-section h2 {{
+    font-weight: 500 !important;
+    font-size: 2.0em !important;
+    color: var(--text-title-h2) !important;
+}}
+
+.cm-header-3,
+.markdown-preview-section h3 {{
+    font-weight: 500 !important;
+    font-size: 1.8em !important;
+    color: var(--text-title-h3) !important;
+}}
+
+.cm-header-4,
+.markdown-preview-section h4 {{
+    font-weight: 500 !important;
+    font-size: 1.6em !important;
+    color: var(--text-title-h4) !important;
+}}
+
+.cm-header-5,
+.markdown-preview-section h5 {{
+    font-weight: 500 !important;
+    font-size: 1.4em !important;
+    color: var(--text-title-h5) !important;
+}}
+
+.cm-header-6,
+.markdown-preview-section h6 {{
+    font-weight: 500 !important;
+    font-size: 1.2em !important;
+    color: var(--text-title-h6) !important;
+}}
+
+.suggestion-item.is-selected {{
+    background-color: var(--background-secondary);
+}}
+
+.empty-state-action:hover {{
+    color: var(--interactive-accent);
+}}
+
+.checkbox-container {{
+    background-color: var(--interactive-before);
+}}
+
+.checkbox-container:after {{
+    background-color: var(--background-secondary-alt);
+}}
+
+.mod-cta {{
+    color: var(--background-secondary-alt) !important;
+    font-weight: 600 !important;
+}}
+
+.mod-cta:hover {{
+    background-color: var(--interactive-before) !important;
+    font-weight: 600 !important;
+}}
+
+.CodeMirror-cursor {{
+    background-color: var(--vim-cursor) !important;
+    opacity: 60% !important;
+}}
+
+.CodeMirror-cursor:hover {{
+    background-color: var(--interactive-accent) !important;
+    opacity: 60% !important;
+}}
+
+input.task-list-item-checkbox {{
+    border: 1px solid var(--task-checkbox);
+    appearance: none;
+    -webkit-appearance: none;
+}}
+
+input.task-list-item-checkbox:checked {{
+    background-color: var(--task-checkbox);
+    box-shadow: inset 0 0 0 2px var(--background-primary);
+}}
+
+.mermaid .note {{
+    fill: var(--frost3) !important;
+}}
+
+.setting-item-control input[type="text"] {{
+    color: var(--text-normal);
+}}
+.setting-item-control input[type="text"]::placeholder {{
+    color: var(--dark3);
+}}
+
+.ͼo:not(.cm-focused) .cm-fat-cursor {{
+    outline-color: var(--orange)
+}}
+
+.cm-focused .cm-fat-cursor {{
+    background-color: var(--orange)
+}}
+
+.theme-dark .cm-string, .theme-dark .cm-string-2 {{
+    color: var(--yellow);
+}}
+
+.theme-dark .cm-builtin, .theme-dark .cm-keyword {{
+    color: var(--red);
+}}
+
+.theme-dark .cm-number {{
+    color: var(--green);
+}}
+
+.theme-dark .cm-variable {{
+    color: var(--light0);
+}}
+
+.theme-dark .cm-property {{
+    color: var(--light0);
+}}
+
+.cm-s-obsidian span.cm-comment {{
+    color: var(--frost3);
+}}
