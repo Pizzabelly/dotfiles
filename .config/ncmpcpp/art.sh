@@ -12,10 +12,10 @@ music_library=$HOME/music # mpd music library directory
 fallback="$HOME/.config/ncmpcpp/unknown.png" # image used if no cover is found
 
 percent_reserved_cols=30
-layout_reserved_rows=3
+layout_reserved_rows=4
 
-font_height=22
-font_width=10
+font_width=11.0
+font_height=23.0
 
 main() {
     kill_previous_instance_of_this_script
@@ -34,8 +34,14 @@ kill_previous_instance_of_this_script() {
 }
 
 find_cover_image() {
-    album="$(mpc --format %album% current)"
     file="$(mpc --format %file% current)"
+    ffmpeg -y -i "$music_library/$file" -an -vcodec copy /tmp/cover.jpg
+    if [ $? -eq 0 ]
+    then
+        src=/tmp/cover.jpg
+        return
+    fi
+    album="$(mpc --format %album% current)"
     album_dir="${file%/*}"
     [ -z "$album_dir" ] && exit 1
     album_dir="$music_library/$album_dir"
@@ -72,10 +78,11 @@ display_cover_image() {
     fi
 
     kitty_left=$(((reserved_cols / 2.0) - (kitty_width / 2.0)))
-    kitty_top=$((((term_rows / 2.0) - (kitty_height / 2.0)) + layout_reserved_rows - 1))
+    kitty_top=$((((term_rows / 2.0) - (kitty_height / 2.0)) + layout_reserved_rows - 3.0))
 
     kitty +icat --clear --transfer-mode=file
-    kitty +icat --place=${kitty_width%.*}x${kitty_height%.*}@${kitty_left%.*}x${kitty_top%.*} --scale-up --transfer-mode=file "$src"
+    kitty +icat --align=center --place=${kitty_width%.*}x${kitty_height%.*}@${kitty_left%.*}x${kitty_top%.*} \
+        --scale-up --transfer-mode=file --sticky "$src"
 }
 
 detect_window_resizes() {

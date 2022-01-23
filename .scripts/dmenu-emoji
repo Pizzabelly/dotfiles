@@ -1,0 +1,6 @@
+#!/bin/sh
+cat $HOME/.data/emoji.json | \
+  jq -r ".[] | .emoji + \" \" + (.aliases[0])" | \
+  wofi --dmenu --conf=/dev/null | \
+  awk '{split($0,a);printf "%s", a[1];}' | \
+  wl-copy

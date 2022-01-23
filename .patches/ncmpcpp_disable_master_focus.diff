@@ -1,0 +1,13 @@
+diff --git a/src/actions.cpp b/src/actions.cpp
+index 9bcb15ec..32be25d8 100644
+--- a/src/actions.cpp
++++ b/src/actions.cpp
+@@ -569,6 +569,8 @@ bool MasterScreen::canBeRun()
+ {
+ 	using Global::myLockedScreen;
+ 	using Global::myInactiveScreen;
++
++	return false;
+ 	
+ 	return myLockedScreen
+ 	    && myInactiveScreen

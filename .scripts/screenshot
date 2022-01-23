@@ -18,7 +18,8 @@ then
   COPY_CMD='wl-copy -t image/png'
   if [[ $1 == 'full' ]]
   then
-    grim -o $MONITOR $DIR/$FILENAME
+    grim $DIR/$FILENAME
+    #grim -o $MONITOR $DIR/$FILENAME
   else
     grim -g "$(slurp)" $DIR/$FILENAME
   fi

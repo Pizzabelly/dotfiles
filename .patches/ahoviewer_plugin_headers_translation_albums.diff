@@ -1,0 +1,1188 @@
+diff --git a/src/booru/browser.cc b/src/booru/browser.cc
+index 7aa84d7..053e82d 100644
+--- a/src/booru/browser.cc
++++ b/src/booru/browser.cc
+@@ -42,6 +42,7 @@ Browser::Browser(BaseObjectType* cobj, const Glib::RefPtr<Gtk::Builder>& bldr)
+         sigc::mem_fun(*this, &Browser::on_entry_button_release_event));
+ 
+     m_TagView->signal_new_tab_tag().connect(sigc::mem_fun(*this, &Browser::on_new_tab_tag));
++    m_InfoBox->signal_new_tab_tag().connect(sigc::mem_fun(*this, &Browser::on_new_tab_tag));
+ 
+     m_ComboModel = Gtk::ListStore::create(m_ComboColumns);
+     m_ComboBox->set_model(m_ComboModel);
+diff --git a/src/booru/curler.cc b/src/booru/curler.cc
+index bc71d6e..60f2563 100644
+--- a/src/booru/curler.cc
++++ b/src/booru/curler.cc
+@@ -147,6 +147,22 @@ void Curler::set_share_handle(CURLSH* s) const
+     curl_easy_setopt(m_EasyHandle, CURLOPT_SHARE, s);
+ }
+ 
++void Curler::reset_headers()
++{
++    if (m_Headers)
++    {
++        curl_slist_free_all(m_Headers);
++        m_Headers = nullptr;
++    }
++}
++
++void Curler::set_headers(const std::vector<std::string>& headers)
++{
++    reset_headers();
++    for (auto& header : headers)
++        m_Headers = curl_slist_append(m_Headers, header.c_str());
++}
++
+ std::string Curler::escape(const std::string& str) const
+ {
+     std::string r;
+@@ -166,6 +182,8 @@ bool Curler::perform()
+     m_Cancel->reset();
+     clear();
+ 
++    curl_easy_setopt(m_EasyHandle, CURLOPT_HTTPHEADER, m_Headers);
++
+     return curl_easy_perform(m_EasyHandle) == CURLE_OK;
+ }
+ 
+diff --git a/src/booru/curler.h b/src/booru/curler.h
+index c0e5b9f..6a7c86a 100644
+--- a/src/booru/curler.h
++++ b/src/booru/curler.h
+@@ -29,6 +29,8 @@ namespace AhoViewer::Booru
+         void set_cookie_file(const std::string& path) const;
+         void set_post_fields(const std::string& fields) const;
+         void set_share_handle(CURLSH* s) const;
++        void reset_headers();
++        void set_headers(const std::vector<std::string>& headers);
+ 
+         std::string escape(const std::string& str) const;
+         bool perform();
+@@ -79,6 +81,7 @@ namespace AhoViewer::Booru
+ 
+         CURL* m_EasyHandle;
+         CURLcode m_Response;
++        struct curl_slist* m_Headers{ nullptr };
+         std::string m_Url;
+         std::vector<unsigned char> m_Buffer;
+ 
+diff --git a/src/booru/image.cc b/src/booru/image.cc
+index 085f892..75b0d47 100644
+--- a/src/booru/image.cc
++++ b/src/booru/image.cc
+@@ -33,6 +33,12 @@ Image::Image(std::string path,
+       m_ThumbnailCurler{ m_ThumbnailUrl, m_Site->get_share_handle() },
+       m_NotesCurler{ notes_url, m_Site->get_share_handle() }
+ {
++    if (post_info.index > 0)
++        m_ShowInList = false;
++
++    if (post_info.count > 1)
++        m_IndexLabel = std::to_string(post_info.index + 1) + "/" + std::to_string(post_info.count);
++
+     m_ThumbnailPath = std::move(thumb_path);
+ 
+     if (!m_IsWebM)
+diff --git a/src/booru/imagelist.cc b/src/booru/imagelist.cc
+index 8da732e..c38e479 100644
+--- a/src/booru/imagelist.cc
++++ b/src/booru/imagelist.cc
+@@ -59,7 +59,8 @@ void ImageList::load(const std::vector<PostDataTuple>& posts, const size_t posts
+     if (!m_ImageFetcher)
+         m_ImageFetcher = std::make_unique<ImageFetcher>(page->get_site()->get_multiplexing());
+ 
+-    auto old_size{ m_Images.size() };
++    auto old_size{ get_visible_vector_size() };
++
+     m_Size = posts_count;
+ 
+     for (const auto& post : posts)
+@@ -104,7 +105,7 @@ void ImageList::load(const std::vector<PostDataTuple>& posts, const size_t posts
+     if (m_Images.empty())
+         return;
+ 
+-    m_Widget->reserve(m_Images.size() - old_size);
++    m_Widget->reserve(get_visible_vector_size() - old_size);
+ 
+     if (m_ThumbnailThread.joinable())
+         m_ThumbnailThread.join();
+@@ -118,6 +119,7 @@ void ImageList::load(const std::vector<PostDataTuple>& posts, const size_t posts
+     }
+     else
+     {
++        //m_Widget->set_change_was_visual(true);
+         m_SignalChanged(m_Images[m_Index]);
+     }
+ }
+@@ -152,4 +154,4 @@ void ImageList::on_thumbnail_loaded()
+ {
+     m_SignalLoadProgress(m_ThumbnailsLoaded, m_ThumbnailsLoading);
+     AhoViewer::ImageList::on_thumbnail_loaded();
+-}
+\ No newline at end of file
++}
+diff --git a/src/booru/imagelist.h b/src/booru/imagelist.h
+index e25140b..867dc2f 100644
+--- a/src/booru/imagelist.h
++++ b/src/booru/imagelist.h
+@@ -20,6 +20,15 @@ namespace AhoViewer::Booru
+             return m_Size ? m_Size : AhoViewer::ImageList::get_size();
+         }
+         size_t get_vector_size() const { return m_Images.size(); }
++        size_t get_visible_vector_size() const
++        {
++            size_t t = 0;
++            for (auto& i : m_Images) {
++                if (i->show_in_list())
++                    t++;
++            }
++            return t;
++        }
+ 
+         void clear() override;
+         void load(const std::vector<PostDataTuple>& posts, const size_t posts_count = 0);
+diff --git a/src/booru/infobox.cc b/src/booru/infobox.cc
+index 64bb98f..40adebc 100644
+--- a/src/booru/infobox.cc
++++ b/src/booru/infobox.cc
+@@ -11,9 +11,13 @@ InfoBox::InfoBox(BaseObjectType* cobj, const Glib::RefPtr<Gtk::Builder>& bldr)
+     bldr->get_widget("Booru::Browser::InfoBox::SourceLabel", m_SourceLabel);
+     bldr->get_widget("Booru::Browser::InfoBox::RatingLabel", m_RatingLabel);
+     bldr->get_widget("Booru::Browser::InfoBox::ScoreLabel", m_ScoreLabel);
++    bldr->get_widget("Booru::Browser::InfoBox::UserLabel", m_UserLabel);
+ 
+     m_UIManager = Glib::RefPtr<Gtk::UIManager>::cast_static(bldr->get_object("UIManager"));
+ 
++    m_UserLabel->signal_activate_link().connect(
++        sigc::mem_fun(*this, &InfoBox::on_activate_link), false);
++
+     auto css = Gtk::CssProvider::create();
+     css->load_from_resource("/ui/css/booru-info-box.css");
+     get_style_context()->add_provider_for_screen(
+@@ -44,6 +48,8 @@ void InfoBox::set_info(const PostInfo& post_info)
+     m_RatingLabel->set_label(post_info.rating);
+     m_ScoreLabel->set_label(post_info.score);
+ 
++    m_UserLabel->set_markup(Glib::ustring::compose("<a href='%1'>%2</a>", post_info.user_tag, post_info.user));
++
+     if (m_IsVisible || !Settings.get_bool("AutoHideInfoBox"))
+         show();
+ }
+@@ -59,6 +65,7 @@ void InfoBox::clear()
+     m_SourceLabel->set_label("");
+     m_RatingLabel->set_label("");
+     m_ScoreLabel->set_label("");
++    m_UserLabel->set_label("");
+ }
+ 
+ void InfoBox::show()
+@@ -118,3 +125,11 @@ bool InfoBox::on_button_press_event(GdkEventButton* e)
+ 
+     return Gtk::EventBox::on_button_press_event(e);
+ }
++
++bool InfoBox::on_activate_link(const Glib::ustring& uri)
++{
++    if (uri.empty())
++        return false;
++    m_SignalNewTabTag(uri);
++    return true;
++}
+diff --git a/src/booru/infobox.h b/src/booru/infobox.h
+index 4f9969c..614f35f 100644
+--- a/src/booru/infobox.h
++++ b/src/booru/infobox.h
+@@ -9,6 +9,8 @@ namespace AhoViewer::Booru
+     class TagView;
+     class InfoBox : public Gtk::EventBox
+     {
++        using SignalNewTabTagType = sigc::signal<void, const std::string&>;
++
+     public:
+         InfoBox(BaseObjectType* cobj, const Glib::RefPtr<Gtk::Builder>& bldr);
+         ~InfoBox() override;
+@@ -26,9 +28,12 @@ namespace AhoViewer::Booru
+ 
+         void on_toggle_auto_hide();
+ 
++        SignalNewTabTagType signal_new_tab_tag() const { return m_SignalNewTabTag; }
++
+     protected:
+         void on_realize() override;
+         bool on_button_press_event(GdkEventButton* e) override;
++        bool on_activate_link(const Glib::ustring& uri);
+ 
+     private:
+         Glib::RefPtr<Gtk::UIManager> m_UIManager;
+@@ -37,8 +42,10 @@ namespace AhoViewer::Booru
+ 
+         bool m_InfoSet{ false }, m_IsVisible{ false };
+         Gtk::Revealer* m_Revealer;
+-        Gtk::Label *m_DateLabel, *m_SourceLabel, *m_RatingLabel, *m_ScoreLabel;
++        Gtk::Label *m_DateLabel, *m_SourceLabel, *m_RatingLabel, *m_ScoreLabel, *m_UserLabel;
+ 
+         sigc::connection m_HideConn;
++
++        SignalNewTabTagType m_SignalNewTabTag;
+     };
+ }
+diff --git a/src/booru/page.cc b/src/booru/page.cc
+index 10574f1..900856c 100644
+--- a/src/booru/page.cc
++++ b/src/booru/page.cc
+@@ -1,4 +1,7 @@
+ #include "page.h"
++#include "gdk/gdkkeysyms.h"
++#include "gio/gmenu.h"
++#include "gtkmm/childpropertyproxy_base.h"
+ using namespace AhoViewer::Booru;
+ 
+ #include "curler.h"
+@@ -73,10 +76,13 @@ Page::Page()
+ 
+     m_IconView->set_model(m_ListStore);
+     m_IconView->set_selection_mode(Gtk::SELECTION_BROWSE);
++    //m_IconView->set_property("activate-on-single-click", TRUE);
+     m_IconView->signal_selection_changed().connect(
+         sigc::mem_fun(*this, &Page::on_selection_changed));
+     m_IconView->signal_button_press_event().connect(
+-        sigc::mem_fun(*this, &Page::on_button_press_event));
++        sigc::mem_fun(*this, &Page::on_button_press_event), false);
++    m_IconView->signal_key_press_event().connect(
++        sigc::mem_fun(*this, &Page::on_key_press_event), false);
+ 
+     // Workaround to have fully centered pixbufs
+     auto* cell{ Gtk::make_managed<CellRendererThumbnail>() };
+@@ -125,7 +131,18 @@ void Page::set_pixbuf(const size_t index, const Glib::RefPtr<Gdk::Pixbuf>& pixbu
+ 
+ void Page::set_selected(const size_t index)
+ {
+-    Gtk::TreePath path{ std::to_string(index) };
++    size_t vindex = m_ImageList->get_visible_index_reverse(index);
++    if (!m_ImageList->index_is_visible(index)) {
++        if (m_ImageList->index_is_visible(index + 1)) {
++            vindex--;
++            m_ChangeNoUpdate = true;
++        } else {
++            return;
++        }
++    } else {
++        m_ChangeWasVisual = true;
++    }
++    Gtk::TreePath path{ std::to_string(vindex) };
+     m_IconView->select_path(path);
+     scroll_to_selected();
+ }
+@@ -138,7 +155,7 @@ void Page::scroll_to_selected()
+     {
+         Gtk::TreePath path{ paths[0] };
+         if (path)
+-        {
++       {
+             m_ScrollConn.block();
+             m_IconView->scroll_to_path(path, false, 0, 0);
+             m_ScrollConn.unblock();
+@@ -321,7 +338,10 @@ void Page::get_posts()
+ 
+         m_Curler.set_url(m_Site->get_posts_url(tags, m_Page));
+ 
+-        if (m_Site->get_type() == Type::GELBOORU)
++        if (m_Site->get_type() == Type::PLUGIN)
++            // TODO: if no libpeas dont do this.
++            m_Curler.set_headers(m_Site->get_plugin_headers());
++        else if (m_Site->get_type() == Type::GELBOORU)
+             m_Curler.set_cookie_file(m_Site->get_cookie());
+         else
+             m_Curler.set_http_auth(m_Site->get_username(), m_Site->get_password());
+@@ -353,6 +373,9 @@ void Page::get_posts()
+ 
+         if (!m_Curler.is_cancelled())
+             m_SignalPostsDownloaded();
++
++        if (m_Site->get_type() == Type::PLUGIN)
++            m_Curler.reset_headers();
+     });
+ 
+     m_SignalPostsDownloadStarted();
+@@ -426,17 +449,30 @@ void Page::on_posts_downloaded()
+ 
+ void Page::on_selection_changed()
+ {
++    if (m_ChangeNoUpdate) {
++        m_ChangeNoUpdate = false;
++        return;
++    }
++
+     std::vector<Gtk::TreePath> paths{ m_IconView->get_selected_items() };
+ 
+     if (!paths.empty())
+     {
+         Gtk::TreePath path{ paths[0] };
++
+         if (path)
+         {
+             size_t index = path[0];
+ 
+             if (index + Settings.get_int("CacheSize") >= m_ImageList->get_vector_size() - 1)
+                 get_next_page();
++            
++            if (m_ChangeWasVisual) {
++                index = m_ImageList->get_visible_index(index);
++                m_ChangeWasVisual = false;
++            } else {
++                index = m_ImageList->get_index();
++            }
+ 
+             m_SignalSelectedChanged(index);
+         }
+@@ -457,24 +493,42 @@ void Page::on_value_changed()
+ 
+ bool Page::on_button_press_event(GdkEventButton* e)
+ {
+-    if (e->type == GDK_BUTTON_PRESS && e->button == 3)
++    if (e->type == GDK_BUTTON_PRESS)
+     {
+         Gtk::TreePath path = m_IconView->get_path_at_pos(e->x, e->y);
+ 
+         if (path)
+         {
+-            m_IconView->select_path(path);
+-            m_IconView->scroll_to_path(path, false, 0, 0);
++            m_ChangeWasVisual = true;
+ 
+-            m_PopupMenu->popup_at_pointer((GdkEvent*)e);
++            if (e->button == 3) {
++                m_IconView->select_path(path);
++                m_IconView->scroll_to_path(path, false, 0, 0);
+ 
+-            return true;
++                m_PopupMenu->popup_at_pointer((GdkEvent*)e);
++
++                return true;
++            }
+         }
+     }
+ 
+     return false;
+ }
+ 
++bool Page::on_key_press_event(GdkEventKey *e) {
++    switch (e->keyval) {
++    case GDK_KEY_Left:
++    case GDK_KEY_Right:
++    case GDK_KEY_Up:
++    case GDK_KEY_Down:
++        m_ChangeWasVisual = true;
++        break;
++    default:
++        break;
++    }
++    return false;
++}
++
+ bool Page::on_tab_button_release_event(GdkEventButton* e)
+ {
+     if (e->type == GDK_BUTTON_RELEASE && e->button == 2)
+diff --git a/src/booru/page.h b/src/booru/page.h
+index 2afc182..7977672 100644
+--- a/src/booru/page.h
++++ b/src/booru/page.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include "curler.h"
++#include "gtkmm/treemodel.h"
+ #include "imagelist.h"
+ #include "site.h"
+ 
+@@ -40,6 +41,7 @@ namespace AhoViewer::Booru
+         void set_pixbuf(const size_t index, const Glib::RefPtr<Gdk::Pixbuf>& pixbuf) override;
+         void set_selected(const size_t index) override;
+         void scroll_to_selected() override;
++        void set_change_was_visual(const bool change_was_visual) override { m_ChangeWasVisual = change_was_visual; }
+ 
+     private:
+         class IconView : public Gtk::IconView
+@@ -111,6 +113,8 @@ namespace AhoViewer::Booru
+         void on_selection_changed();
+         void on_value_changed();
+         bool on_button_press_event(GdkEventButton* e) override;
++        bool on_key_press_event(GdkEventKey *e) override;
++
+         bool on_tab_button_release_event(GdkEventButton* e);
+ 
+         Gtk::Menu* m_PopupMenu;
+@@ -133,6 +137,7 @@ namespace AhoViewer::Booru
+         std::atomic<bool> m_Saving{ false };
+         bool m_LastPage{ false }, m_KeepAligned{ false };
+         std::vector<PostDataTuple> m_Posts;
++        bool m_ChangeWasVisual{ false }, m_ChangeNoUpdate{ false };
+ 
+         Glib::RefPtr<Gio::Cancellable> m_SaveCancel;
+         std::thread m_GetPostsThread, m_SaveImagesThread;
+diff --git a/src/booru/site.cc b/src/booru/site.cc
+index cba1155..cadfc0d 100644
+--- a/src/booru/site.cc
++++ b/src/booru/site.cc
+@@ -816,7 +816,7 @@ Site::parse_post_data(unsigned char* data, const size_t size)
+                 {
+                     std::vector<Tag> tags;
+                     std::string id, image_url, thumb_url, post_url, notes_url, date, source, rating,
+-                        score;
++                        score, user;
+ 
+                     if (m_Type == Type::DANBOORU_V2)
+                     {
+@@ -827,6 +827,7 @@ Site::parse_post_data(unsigned char* data, const size_t size)
+                         source    = post.get_value("source");
+                         rating    = post.get_value("rating");
+                         score     = post.get_value("score");
++                        user      = post.get_value("creator_id");
+                     }
+                     else
+                     {
+@@ -837,6 +838,7 @@ Site::parse_post_data(unsigned char* data, const size_t size)
+                         source    = post.get_attribute("source");
+                         rating    = post.get_attribute("rating");
+                         score     = post.get_attribute("score");
++                        user      = post.get_attribute("author");
+                     }
+ 
+                     if (m_Type == Type::DANBOORU_V2)
+@@ -855,7 +857,7 @@ Site::parse_post_data(unsigned char* data, const size_t size)
+                             std::transform(std::istream_iterator<std::string>{ ss },
+                                            std::istream_iterator<std::string>{},
+                                            std::back_inserter(tags),
+-                                           [v](const std::string& t) { return Tag(t, v.first); });
++                                           [v](const std::string& t) { return Tag(t, "", v.first); });
+                         }
+                     }
+                     else
+@@ -871,7 +873,7 @@ Site::parse_post_data(unsigned char* data, const size_t size)
+                                            [&posts_tags](const std::string& t) {
+                                                auto it{ posts_tags->find(t) };
+ 
+-                                               return Tag(t,
++                                               return Tag(t, "",
+                                                           it != posts_tags->end()
+                                                               ? it->second
+                                                               : Tag::Type::UNKNOWN);
+@@ -956,7 +958,7 @@ Site::parse_post_data(unsigned char* data, const size_t size)
+                     }
+ 
+                     PostInfo post_info{
+-                        format_date_time(t), source, get_rating_string(rating), score
++                        format_date_time(t), source, get_rating_string(rating), score, user, "user:" + user
+                     };
+ 
+                     posts.emplace_back(image_url, thumb_url, post_url, notes_url, tags, post_info);
+diff --git a/src/booru/site.h b/src/booru/site.h
+index 277e82c..25caef3 100644
+--- a/src/booru/site.h
++++ b/src/booru/site.h
+@@ -46,6 +46,8 @@ namespace AhoViewer::Booru
+ #ifdef HAVE_LIBPEAS
+         std::string get_plugin_name() const { return m_Plugin ? m_Plugin->get_name() : ""; }
+         void set_plugin(std::shared_ptr<Plugin::SitePlugin> p) { m_Plugin = std::move(p); }
++
++        std::vector<std::string> get_plugin_headers() const { return m_Plugin->get_headers(); }
+ #endif // HAVE_LIBPEAS
+ 
+         // At the moment this can only be controlled by plugins (no built in site type seems to have
+diff --git a/src/booru/tagentry.cc b/src/booru/tagentry.cc
+index 75ac47e..ab4ed56 100644
+--- a/src/booru/tagentry.cc
++++ b/src/booru/tagentry.cc
+@@ -1,4 +1,6 @@
+ #include "tagentry.h"
++#include <algorithm>
++#include <cctype>
+ using namespace AhoViewer::Booru;
+ 
+ TagEntry::TagEntry(BaseObjectType* cobj, const Glib::RefPtr<Gtk::Builder>& bldr) : Gtk::Entry(cobj)
+@@ -25,6 +27,7 @@ TagEntry::TagEntry(BaseObjectType* cobj, const Glib::RefPtr<Gtk::Builder>& bldr)
+ 
+ void TagEntry::set_tags(const std::set<Tag>& tags)
+ {
++
+     m_Tags = &tags;
+ }
+ 
+@@ -60,6 +63,45 @@ void TagEntry::on_text_changed()
+ 
+     m_Model->clear();
+ 
++    if (key.length() >= static_cast<size_t>(m_TagCompletion->get_minimum_key_length()))
++    {
++        size_t i{ 0 };
++        for (auto& tag : *m_Tags)
++        {
++            bool match = false;
++            for (size_t j = 0; j < tag.tag.length(); j++)
++            {
++                if (tag.tag.length() - j >= key.length() &&
++                    tag.tag.compare(j, key.length(), key) == 0)
++                {
++                    match = true;
++                    break;
++                }
++            }
++            if (!match)
++            {
++                std::replace(key.begin(), key.end(), '_', ' ');
++                for (size_t j = 0; j < tag.translation.length(); j++)
++                {
++                    if (tag.translation.length() - j >= key.length() &&
++                        tag.translation.compare(j, key.length(), key) == 0)
++                    {
++                        match = true;
++                        break;
++                    }
++                }
++            }
++            if (match)
++            {
++                Gtk::TreeIter iter = m_Model->append();
++                iter->set_value(m_Columns.tag, tag);
++                if (++i >= 20)
++                    break;
++            }
++        }
++    }
++
++    /*
+     if (key.length() >= static_cast<size_t>(m_TagCompletion->get_minimum_key_length()))
+     {
+         size_t i{ 0 };
+@@ -75,6 +117,7 @@ void TagEntry::on_text_changed()
+                 break;
+         }
+     }
++    */
+ 
+     m_TagCompletion->complete();
+ }
+@@ -82,7 +125,7 @@ void TagEntry::on_text_changed()
+ // Temporarly inserts selected matches into the entry (when moving between elements in the popup)
+ bool TagEntry::on_cursor_on_match(const Gtk::TreeIter& iter)
+ {
+-    const std::string tag{ iter->get_value(m_Columns.tag) };
++    const std::string tag{ iter->get_value(m_Columns.tag).tag };
+     int spos, epos;
+     get_selection_bounds(spos, epos);
+ 
+@@ -113,7 +156,7 @@ bool TagEntry::on_match_selected(const Gtk::TreeIter& iter)
+     size_t pos{ get_text().substr(0, spos).find_last_of(' ') };
+     std::string prefix{ pos == std::string::npos ? (get_text()[0] == '-' ? "-" : "")
+                                                  : get_text().substr(0, pos + 1) },
+-        tag{ iter->get_value(m_Columns.tag) }, suffix{ get_text().substr(epos) };
++        tag{ iter->get_value(m_Columns.tag).tag }, suffix{ get_text().substr(epos) };
+ 
+     if (pos != std::string::npos && get_text().substr(pos + 1, 1) == "-")
+         prefix += '-';
+diff --git a/src/booru/tagview.cc b/src/booru/tagview.cc
+index d353fd9..0e2b931 100644
+--- a/src/booru/tagview.cc
++++ b/src/booru/tagview.cc
+@@ -335,7 +335,7 @@ bool TagView::on_tag_button_press_event(GdkEventButton* e, Row* row)
+         if (std::find(tags.begin(), tags.end(), row->tag.tag) != tags.end())
+             tags.erase(std::remove(tags.begin(), tags.end(), row->tag.tag), tags.end());
+         else
+-            tags.push_back(row->tag);
++            tags.push_back(row->tag.tag);
+ 
+         std::ostringstream oss;
+         std::copy(tags.begin(), tags.end(), std::ostream_iterator<std::string>(oss, " "));
+diff --git a/src/image.h b/src/image.h
+index 8d1290a..3b0fd33 100644
+--- a/src/image.h
++++ b/src/image.h
+@@ -44,7 +44,11 @@ namespace AhoViewer
+         virtual const Glib::RefPtr<Gdk::Pixbuf>& get_pixbuf();
+         virtual const Glib::RefPtr<Gdk::Pixbuf>& get_thumbnail(Glib::RefPtr<Gio::Cancellable> c);
+ 
++        virtual bool go_next() { return false; }
++        virtual bool go_previous() { return false; }
++
+         const std::vector<Note>& get_notes() const { return m_Notes; }
++        const std::string& get_index_label() const { return m_IndexLabel; }
+ 
+         virtual void load_pixbuf(Glib::RefPtr<Gio::Cancellable> c);
+         virtual void reset_pixbuf();
+@@ -54,6 +58,8 @@ namespace AhoViewer
+         unsigned int get_gif_frame_delay() const;
+         void reset_gif_animation();
+ 
++        bool show_in_list() const { return m_ShowInList; }
++
+         void trash();
+ 
+         Glib::Dispatcher& signal_pixbuf_changed() { return m_SignalPixbufChanged; }
+@@ -61,6 +67,7 @@ namespace AhoViewer
+ 
+         static const size_t ThumbnailSize{ 100 };
+ 
++
+     protected:
+         static bool is_webm(const std::string&);
+ 
+@@ -88,6 +95,10 @@ namespace AhoViewer
+ 
+         std::vector<Note> m_Notes;
+ 
++        bool m_ShowInList{ true };
++
++        std::string m_IndexLabel;
++
+         std::mutex m_Mutex;
+         Glib::Dispatcher m_SignalPixbufChanged, m_SignalNotesChanged;
+ 
+diff --git a/src/imagebox.cc b/src/imagebox.cc
+index 92902bb..f4b0fdc 100644
+--- a/src/imagebox.cc
++++ b/src/imagebox.cc
+@@ -167,6 +167,7 @@ ImageBox::ImageBox(BaseObjectType* cobj, const Glib::RefPtr<Gtk::Builder>& bldr)
+     bldr->get_widget("ImageBox::Image", m_GtkImage);
+     bldr->get_widget("ImageBox::NoteFixed", m_NoteFixed);
+     bldr->get_widget("ImageBox::DrawingArea", m_GstWidget);
++    bldr->get_widget("ImageBox::Index", m_IndexLabel);
+     bldr->get_widget_derived("StatusBar", m_StatusBar);
+     bldr->get_widget_derived("MainWindow", m_MainWindow);
+ 
+@@ -464,6 +465,11 @@ void ImageBox::set_image(const std::shared_ptr<Image>& image)
+             m_NotesConn = m_Image->signal_notes_changed().connect(
+                 sigc::mem_fun(*this, &ImageBox::on_notes_changed));
+ 
++        if (!m_Image->get_index_label().empty())
++            m_IndexLabel->set_label(m_Image->get_index_label());
++        else
++            m_IndexLabel->set_label("");
++
+         queue_draw_image(true);
+     }
+     else
+diff --git a/src/imagebox.h b/src/imagebox.h
+index 65bcfee..b24bffb 100644
+--- a/src/imagebox.h
++++ b/src/imagebox.h
+@@ -99,6 +99,7 @@ namespace AhoViewer
+         Gtk::Image* m_GtkImage;
+         Gtk::Widget* m_GstWidget;
+         Gtk::Menu* m_PopupMenu;
++        Gtk::Label* m_IndexLabel;
+         Glib::RefPtr<Gtk::UIManager> m_UIManager;
+         Glib::RefPtr<Gtk::Action> m_NextAction, m_PreviousAction;
+         SmoothScroll m_HSmoothScroll, m_VSmoothScroll;
+diff --git a/src/imagelist.cc b/src/imagelist.cc
+index 0f36752..0fc34e1 100644
+--- a/src/imagelist.cc
++++ b/src/imagelist.cc
+@@ -1,4 +1,5 @@
+ #include "imagelist.h"
++#include <memory>
+ using namespace AhoViewer;
+ 
+ #include "booru/image.h"
+@@ -230,18 +231,25 @@ void ImageList::load_thumbnails()
+ 
+     std::vector<size_t> indices(m_Images.size());
+     std::iota(indices.begin(), indices.end(), 0);
+-    std::sort(indices.begin(), indices.end(), m_IndexSort);
++    //std::sort(indices.begin(), indices.end(), m_IndexSort);
++
++    size_t offset = 0;
+ 
+     for (const size_t i : indices)
+     {
+         if (m_ThumbnailCancel->is_cancelled())
+             break;
+ 
++        if (!m_Images[i]->show_in_list()) {
++            offset++;
++            continue;
++        }
++
+         // Only load thumbnails that haven't been already
+-        auto it = m_Widget->m_ListStore->get_iter(std::to_string(i));
++        auto it = m_Widget->m_ListStore->get_iter(std::to_string(i - offset));
+         if (!it || !it->get_value(m_Widget->m_Columns.pixbuf))
+         {
+-            m_ThreadPool.push([&, i]() {
++            m_ThreadPool.push([&, i, offset]() {
+                 Glib::RefPtr<Gdk::Pixbuf> thumb = m_Images[i]->get_thumbnail(m_ThumbnailCancel);
+ 
+                 if (!m_ThumbnailCancel->is_cancelled())
+@@ -249,7 +257,7 @@ void ImageList::load_thumbnails()
+                     if (!thumb)
+                         thumb = Image::get_missing_pixbuf();
+ 
+-                    m_ThumbnailQueue.emplace(i, std::move(thumb));
++                    m_ThumbnailQueue.emplace(i - offset, std::move(thumb));
+                     ++m_ThumbnailsLoaded;
+                     m_SignalThumbnailLoaded();
+                 }
+diff --git a/src/imagelist.h b/src/imagelist.h
+index da2fa75..60a9764 100644
+--- a/src/imagelist.h
++++ b/src/imagelist.h
+@@ -1,6 +1,8 @@
+ #pragma once
+ 
+ #include "archive/archive.h"
++#include "gtkmm/box.h"
++#include "gtkmm/treemodelcolumn.h"
+ #include "image.h"
+ #include "threadpool.h"
+ #include "tsqueue.h"
+@@ -47,13 +49,18 @@ namespace AhoViewer
+             {
+                 return m_SignalSelectedChanged;
+             }
+-            struct ModelColumns : public Gtk::TreeModelColumnRecord
++
++            struct ModelColumns : public Gtk::TreeModel::ColumnRecord
+             {
+-                ModelColumns() { add(pixbuf); }
++                ModelColumns()
++                {
++                    add(pixbuf);
++                }
+                 Gtk::TreeModelColumn<Glib::RefPtr<Gdk::Pixbuf>> pixbuf;
+             };
+ 
+             virtual void set_selected(const size_t) = 0;
++            virtual void set_change_was_visual(const bool change_was_visual) = 0;
+             virtual void scroll_to_selected()       = 0;
+ 
+             virtual void clear()
+@@ -113,9 +120,31 @@ namespace AhoViewer
+         bool can_go_next() const;
+         bool can_go_previous() const;
+ 
++        bool index_is_visible(size_t index) const {
++            if (index >= m_Images.size() || index < 0)
++                return false;
++            return m_Images[index]->show_in_list();
++        }
++
+         virtual size_t get_size() const { return m_Images.size(); }
+ 
+         size_t get_index() const { return m_Index; }
++        size_t get_visible_index(size_t index) const {
++            for (size_t i = 0; i < m_Images.size(); i++) {
++                if (m_Images[i]->show_in_list() && !index--)
++                    return i;
++            }
++            return 0;
++        }
++        size_t get_visible_index_reverse(size_t index) const {
++            size_t ret = 0;
++            for (size_t i = 0; i < index; i++) {
++                if (m_Images[i]->show_in_list())
++                    ret++;
++            }
++            return ret;
++        }
++
+         const std::shared_ptr<Image>& get_current() const { return m_Images[m_Index]; }
+         const Archive& get_archive() const { return *m_Archive; }
+         bool empty() const { return m_Images.empty(); }
+@@ -157,7 +186,7 @@ namespace AhoViewer
+         std::thread m_ThumbnailThread;
+         ThreadPool m_ThreadPool;
+         TSQueue<PixbufPair> m_ThumbnailQueue;
+-        std::atomic<size_t> m_ThumbnailsLoading{ 0 }, m_ThumbnailsLoaded{ 0 };
++        std::atomic<size_t> m_ThumbnailsLoading{ 0 }, m_ThumbnailsLoaded{ 0 }, m_ThumbnailOffset{ 0 };
+ 
+         SignalChangedType m_SignalChanged;
+         SignalLoadProgressType m_SignalLoadProgress;
+diff --git a/src/plugin/siteactivatable.c b/src/plugin/siteactivatable.c
+index 3b2be46..95816df 100644
+--- a/src/plugin/siteactivatable.c
++++ b/src/plugin/siteactivatable.c
+@@ -194,6 +194,7 @@ G_DEFINE_BOXED_TYPE(AhoviewerTag, ahoviewer_tag, ahoviewer_tag_ref, ahoviewer_ta
+ /**
+  * ahoviewer_tag_new:
+  * @tag: (transfer full): A #utf8.
++ * @translation: (transfer full): A #utf8.
+  * @type: A #AhoviewerTagType.
+  *
+  * Allocates a new #AhoviewerTag-struct.
+@@ -201,12 +202,13 @@ G_DEFINE_BOXED_TYPE(AhoviewerTag, ahoviewer_tag, ahoviewer_tag_ref, ahoviewer_ta
+  * Returns: a new #AhoviewerTag. The newly allocated #AhoviewerTag should
+  *   be freed with ahoviewer_tag_unref().
+  */
+-AhoviewerTag* ahoviewer_tag_new(gchar* tag, AhoviewerTagType type)
++AhoviewerTag* ahoviewer_tag_new(gchar* tag, gchar* translation, AhoviewerTagType type)
+ {
+     AhoviewerTag* n_tag = g_slice_new0(AhoviewerTag);
+ 
+     n_tag->ref_count = 1;
+     n_tag->tag = tag;
++    n_tag->translation = translation;
+     n_tag->type = type;
+ 
+     return n_tag;
+@@ -246,6 +248,9 @@ void ahoviewer_tag_unref(AhoviewerTag* tag)
+     if (G_LIKELY(tag->tag))
+         g_free(tag->tag);
+ 
++    if (G_LIKELY(tag->translation))
++        g_free(tag->translation);
++
+     g_slice_free(AhoviewerTag, tag);
+ }
+ 
+@@ -340,6 +345,33 @@ const gchar* ahoviewer_site_activatable_get_icon_url(AhoviewerSiteActivatable* a
+     return url;
+ }
+ 
++/**
++ * ahoviewer_site_activatable_get_headers:
++ * @activatable: A #AhoviewerSiteActivatable.
++ *
++ * Returns: (element-type utf8) (transfer full): Array of headers, should be freed with
++ *   g_ptr_array_unref.
++ */
++GPtrArray* ahoviewer_site_activatable_get_headers(AhoviewerSiteActivatable* activatable)
++{
++    AhoviewerSiteActivatableInterface* iface;
++
++    g_return_val_if_fail(AHOVIEWER_IS_SITE_ACTIVATABLE(activatable), NULL);
++
++    iface = AHOVIEWER_SITE_ACTIVATABLE_GET_IFACE(activatable);
++    if (G_LIKELY(iface->get_headers))
++    {
++        GPtrArray* headers = iface->get_headers(activatable);
++
++        if (G_LIKELY(headers)) // is this right?
++            g_ptr_array_set_free_func(headers, (GDestroyNotify)g_free);
++
++        return headers;
++    }
++
++    return NULL;
++}
++
+ /**
+  * ahoviewer_site_activatable_parse_post_data:
+  * @activatable: A #AhoviewerSiteActivatable.
+diff --git a/src/plugin/siteactivatable.h b/src/plugin/siteactivatable.h
+index 3fe8592..30b070c 100644
+--- a/src/plugin/siteactivatable.h
++++ b/src/plugin/siteactivatable.h
+@@ -54,6 +54,10 @@ struct _AhoviewerPost
+     gchar* source;
+     gchar* rating;
+     gchar* score;
++    gchar* user;
++    gchar* user_tag;
++    gint index;
++    gint count;
+ };
+ 
+ struct _AhoviewerNote
+@@ -69,6 +73,7 @@ struct _AhoviewerTag
+     gint ref_count;
+ 
+     gchar* tag;
++    gchar* translation;
+     AhoviewerTagType type;
+ };
+ 
+@@ -88,7 +93,7 @@ AHOVIEWER_EXPORT AhoviewerNote* ahoviewer_note_ref(AhoviewerNote* note);
+ AHOVIEWER_EXPORT void ahoviewer_note_unref(AhoviewerNote* note);
+ 
+ AHOVIEWER_EXPORT GType ahoviewer_tag_get_type(void) G_GNUC_CONST;
+-AHOVIEWER_EXPORT AhoviewerTag* ahoviewer_tag_new(gchar* tag, AhoviewerTagType type);
++AHOVIEWER_EXPORT AhoviewerTag* ahoviewer_tag_new(gchar* tag, gchar* translation, AhoviewerTagType type);
+ AHOVIEWER_EXPORT AhoviewerTag* ahoviewer_tag_ref(AhoviewerTag* tag);
+ AHOVIEWER_EXPORT void ahoviewer_tag_unref(AhoviewerTag* tag);
+ 
+@@ -107,6 +112,7 @@ struct _AhoviewerSiteActivatableInterface
+     const gchar* (*get_posts_uri)(AhoviewerSiteActivatable* activatable, const gchar* tags, size_t page, size_t limit);
+     const gchar* (*get_register_url)(AhoviewerSiteActivatable* activatable, const gchar* url);
+     const gchar* (*get_icon_url)(AhoviewerSiteActivatable* activatable, const gchar* url);
++    GPtrArray* (*get_headers)(AhoviewerSiteActivatable* activatable);
+     AhoviewerPosts* (*parse_post_data)(AhoviewerSiteActivatable* activatable, const unsigned char* data, const size_t size, const gchar* url, const gboolean samples);
+     GPtrArray* (*parse_note_data)(AhoviewerSiteActivatable* activatable, const unsigned char* data, const size_t size);
+ };
+@@ -125,6 +131,9 @@ const gchar* ahoviewer_site_activatable_get_register_url(AhoviewerSiteActivatabl
+ AHOVIEWER_EXPORT
+ const gchar* ahoviewer_site_activatable_get_icon_url(AhoviewerSiteActivatable* activatable, const gchar* url);
+ 
++AHOVIEWER_EXPORT
++GPtrArray* ahoviewer_site_activatable_get_headers(AhoviewerSiteActivatable* activatable);
++
+ AHOVIEWER_EXPORT
+ AhoviewerPosts* ahoviewer_site_activatable_parse_post_data(
+     AhoviewerSiteActivatable* activatable, const unsigned char* data, const size_t size, const gchar* url, const gboolean samples);
+diff --git a/src/plugin/siteplugin.cc b/src/plugin/siteplugin.cc
+index 0c64ce2..8ec2dd5 100644
+--- a/src/plugin/siteplugin.cc
++++ b/src/plugin/siteplugin.cc
+@@ -41,6 +41,22 @@ std::string SitePlugin::get_icon_url(const std::string& url) const
+     return null_check_string(ahoviewer_site_activatable_get_icon_url(m_Activatable, url.c_str()));
+ }
+ 
++std::vector<std::string> SitePlugin::get_headers() const
++{
++    GPtrArray* plugin_headers{ ahoviewer_site_activatable_get_headers(m_Activatable) };
++
++    std::vector<std::string> headers;
++
++    if (plugin_headers)
++    {
++        for (guint i = 0; i < plugin_headers->len; ++i)
++            headers.push_back(static_cast<gchar*>(plugin_headers->pdata[i]));
++        g_ptr_array_unref(plugin_headers);
++    }
++
++    return headers;
++}
++
+ std::tuple<std::vector<PostDataTuple>, size_t, std::string>
+ SitePlugin::parse_post_data(const unsigned char* data,
+                             const size_t size,
+@@ -71,14 +87,19 @@ SitePlugin::parse_post_data(const unsigned char* data,
+                 for (guint j = 0; j < tags->len; ++j)
+                 {
+                     AhoviewerTag* td{ static_cast<AhoviewerTag*>(tags->pdata[j]) };
+-                    tags_vec.emplace_back(td->tag, static_cast<Tag::Type>(td->type));
++                    tags_vec.emplace_back(
++                        Tag(td->tag, td->translation, static_cast<Tag::Type>(td->type)));
+                 }
+ 
+                 PostInfo post_info{ Booru::format_date_time(static_cast<date::sys_seconds>(
+                                         std::chrono::duration<gint64>(pd->date))),
+                                     null_check_string(pd->source),
+                                     Booru::get_rating_string(null_check_string(pd->rating)),
+-                                    null_check_string(pd->score) };
++                                    null_check_string(pd->score),
++                                    null_check_string(pd->user),
++                                    null_check_string(pd->user_tag),
++                                    pd->index,
++                                    pd->count};
+ 
+                 posts_vec.emplace_back(null_check_string(pd->image_url),
+                                        null_check_string(pd->thumb_url),
+diff --git a/src/plugin/siteplugin.h b/src/plugin/siteplugin.h
+index 4f39cc7..948a7a5 100644
+--- a/src/plugin/siteplugin.h
++++ b/src/plugin/siteplugin.h
+@@ -21,6 +21,7 @@ namespace AhoViewer::Plugin
+         std::string get_posts_uri(const std::string& tags, size_t page, size_t limit) const;
+         std::string get_register_url(const std::string& tags) const;
+         std::string get_icon_url(const std::string& url) const;
++        std::vector<std::string> get_headers() const;
+ 
+         std::tuple<std::vector<Booru::PostDataTuple>, size_t, std::string>
+         parse_post_data(const unsigned char* data,
+diff --git a/src/thumbnailbar.h b/src/thumbnailbar.h
+index 33dad71..3766d21 100644
+--- a/src/thumbnailbar.h
++++ b/src/thumbnailbar.h
+@@ -20,6 +20,7 @@ namespace AhoViewer
+         void on_show() override;
+ 
+         void set_selected(const size_t index) override;
++        void set_change_was_visual(const bool change_was_visual) override { };
+         void scroll_to_selected() override;
+ 
+     private:
+diff --git a/src/ui/ahoviewer.ui b/src/ui/ahoviewer.ui
+index be37066..c1d74b0 100644
+--- a/src/ui/ahoviewer.ui
++++ b/src/ui/ahoviewer.ui
+@@ -452,6 +452,46 @@
+                                                 <property name="position">3</property>
+                                               </packing>
+                                             </child>
++                                            <child>
++                                              <object class="GtkBox">
++                                                <property name="visible">True</property>
++                                                <property name="can-focus">False</property>
++                                                <property name="hexpand">True</property>
++                                                <property name="spacing">3</property>
++                                                <child>
++                                                  <object class="GtkLabel" id="label16">
++                                                    <property name="visible">True</property>
++                                                    <property name="can-focus">False</property>
++                                                    <property name="label" translatable="yes">User:      </property>
++                                                    <property name="xalign">0</property>
++                                                  </object>
++                                                  <packing>
++                                                    <property name="expand">False</property>
++                                                    <property name="fill">True</property>
++                                                    <property name="position">0</property>
++                                                  </packing>
++                                                </child>
++                                                <child>
++                                                  <object class="GtkLabel" id="Booru::Browser::InfoBox::UserLabel">
++                                                    <property name="visible">True</property>
++                                                    <property name="can-focus">False</property>
++                                                    <property name="selectable">True</property>
++                                                    <property name="ellipsize">end</property>
++                                                    <property name="xalign">0</property>
++                                                  </object>
++                                                  <packing>
++                                                    <property name="expand">True</property>
++                                                    <property name="fill">True</property>
++                                                    <property name="position">1</property>
++                                                  </packing>
++                                                </child>
++                                              </object>
++                                              <packing>
++                                                <property name="expand">False</property>
++                                                <property name="fill">True</property>
++                                                <property name="position">4</property>
++                                              </packing>
++                                            </child>
+                                           </object>
+                                         </child>
+                                       </object>
+@@ -553,6 +593,30 @@
+                                     <property name="can-focus">False</property>
+                                   </object>
+                                 </child>
++                                <child>
++                                  <object class="GtkOverlay" id="ImageBox::IndexOverlay">
++                                    <property name="visible">True</property>
++                                    <property name="can-focus">False</property>
++                                    <child>
++                                      <object class="GtkLabel" id="ImageBox::Index">
++                                        <property name="visible">True</property>
++                                        <property name="can-focus">False</property>
++                                        <property name="opacity">0.59999999999999998</property>
++                                        <property name="margin-start">10</property>
++                                        <property name="margin-top">6</property>
++                                        <property name="single-line-mode">True</property>
++                                        <attributes>
++                                          <attribute name="weight" value="light"/>
++                                          <attribute name="scale" value="1.3999999999999999"/>
++                                          <attribute name="background" value="#24241f1f3131"/>
++                                        </attributes>
++                                      </object>
++                                      <packing>
++                                        <property name="index">-1</property>
++                                      </packing>
++                                    </child>
++                                  </object>
++                                </child>
+                               </object>
+                             </child>
+                           </object>
+diff --git a/src/util.cc b/src/util.cc
+index fd01fe7..5ff0ae9 100644
+--- a/src/util.cc
++++ b/src/util.cc
+@@ -49,25 +49,35 @@ namespace AhoViewer::Booru
+ {
+     std::istream& operator>>(std::istream& in, Tag& e)
+     {
+-        std::string s;
+-        in >> s;
+-        e.tag = s;
++        std::string tag, translation;
++        Tag::Type type = Tag::Type::UNKNOWN;
++
++        in >> tag;
+ 
+         // Should have the type after the space
+         if (in.peek() == ' ')
+         {
+-            int type;
+-            in >> type;
++            int type_int;
++            in >> type_int;
+ 
+-            if (type >= 0 && type <= 6)
+-                e.type = static_cast<Tag::Type>(type);
++            if (type_int >= 0 && type_int <= 6)
++                type = static_cast<Tag::Type>(type_int);
+         }
+ 
++        if (in.peek() == ' ')
++        {
++            std::getline(in, translation);
++            translation = translation.substr(1, translation.length() - 1);
++
++        }
++
++        e = Tag(tag, translation, type);
++
+         return in;
+     }
+     std::ostream& operator<<(std::ostream& out, const Tag& e)
+     {
+-        out << e.tag << ' ' << static_cast<int>(e.type);
++        out << e.tag << ' ' << static_cast<int>(e.type) << ' ' << e.translation;
+         return out;
+     }
+ 
+diff --git a/src/util.h b/src/util.h
+index a36caae..d2ade6a 100644
+--- a/src/util.h
++++ b/src/util.h
+@@ -45,15 +45,21 @@ namespace AhoViewer
+         static const int IconViewItemPadding{ 2 };
+         struct PostInfo
+         {
+-            PostInfo(std::string date, std::string source, std::string rating, std::string score)
++            PostInfo(std::string date, std::string source, std::string rating, std::string score,
++                std::string user = "", std::string user_tag = "", int index = 0, int count = 1)
+                 : date{ std::move(date) },
+                   source{ std::move(source) },
+                   rating{ std::move(rating) },
+-                  score{ std::move(score) }
++                  score{ std::move(score) },
++                  user{ std::move(user) },
++                  user_tag{ std::move(user_tag) },
++                  index{ std::move(index) },
++                  count{ std::move(count) }
+             {
+             }
+ 
+-            const std::string date, source, rating, score;
++            const std::string date, source, rating, score, user, user_tag;
++            int index, count;
+         };
+         enum class Rating
+         {
+@@ -85,18 +91,23 @@ namespace AhoViewer
+             };
+ 
+             Tag() = default;
+-            Tag(std::string tag, const Type type = Type::UNKNOWN)
++            Tag(std::string tag, std::string translation = "", const Type type = Type::UNKNOWN)
+                 : tag{ std::move(tag) },
++                  translation{ std::move(translation) },
+                   type{ type }
+             {
++                if (!this->translation.empty())
++                    tag_view = this->tag + " (" + this->translation + ")";
++                else
++                    tag_view = this->tag;
+             }
+             Tag(const Tag& orig) = default;
+ 
+             friend std::istream& operator>>(std::istream& in, Tag& e);
+             friend std::ostream& operator<<(std::ostream& out, const Tag& e);
+ 
+-            operator std::string() const { return tag; }
+-            operator Glib::ustring() const { return tag; }
++            operator std::string() const { return tag_view; }
++            operator Glib::ustring() const { return tag_view; }
+             operator Gdk::RGBA() const;
+ 
+             inline bool operator==(const Tag& rhs) const { return tag == rhs.tag; }
+@@ -107,6 +118,8 @@ namespace AhoViewer
+             inline bool operator>=(const Tag& rhs) const { return tag.compare(rhs.tag) >= 0; }
+ 
+             std::string tag;
++            std::string translation;
++            std::string tag_view;
+             mutable Type type{ Type::UNKNOWN };
+         };
+         enum class TagViewOrder

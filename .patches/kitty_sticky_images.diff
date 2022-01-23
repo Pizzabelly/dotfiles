@@ -1,0 +1,181 @@
+diff --git a/kittens/icat/main.py b/kittens/icat/main.py
+index 4af33c59..b6237b04 100755
+--- a/kittens/icat/main.py
++++ b/kittens/icat/main.py
+@@ -123,6 +123,11 @@
+ --hold
+ type=bool-set
+ Wait for a key press before exiting after displaying the images.
++
++
++--sticky
++type=bool-set
++Don't scroll image with terminal.
+ '''
+ 
+ 
+@@ -220,6 +225,7 @@ def show(
+     fmt: 'GRT_f',
+     transmit_mode: 'GRT_t' = 't',
+     align: str = 'center',
++    sticky: int = 0,
+     place: Optional['Place'] = None,
+     use_number: int = 0
+ ) -> None:
+@@ -229,6 +235,7 @@ def show(
+     cmd.s = width
+     cmd.v = height
+     cmd.z = zindex
++    cmd.P = sticky
+     if use_number:
+         cmd.I = use_number  # noqa
+         cmd.q = 2
+@@ -324,6 +331,7 @@ def process(path: str, args: IcatCLIOptions, parsed_opts: ParsedOpts, is_tempfil
+     needs_scaling = needs_scaling or args.scale_up
+     file_removed = False
+     use_number = 0
++    is_sticky = 1 if args.sticky else 0
+     if m.fmt == 'png' and not needs_scaling:
+         outfile = path
+         transmit_mode: 'GRT_t' = 't' if is_tempfile else 'f'
+@@ -344,7 +352,7 @@ def process(path: str, args: IcatCLIOptions, parsed_opts: ParsedOpts, is_tempfil
+             outfile, width, height = frame_data.frames[0].path, frame_data.width, frame_data.height
+     show(
+         outfile, width, height, parsed_opts.z_index, fmt, transmit_mode,
+-        align=args.align, place=parsed_opts.place, use_number=use_number
++        align=args.align, sticky=is_sticky, place=parsed_opts.place, use_number=use_number
+     )
+     if use_number:
+         show_frames(frame_data, use_number, args.loop)
+diff --git a/kittens/tui/images.py b/kittens/tui/images.py
+index ec794e36..de65a95a 100644
+--- a/kittens/tui/images.py
++++ b/kittens/tui/images.py
+@@ -357,6 +357,7 @@ class GraphicsCommand:
+     z = z_index = gap = Alias(0)
+     C = cursor_movement = compose_mode = Alias(cast(GRT_C, 0))
+     d = delete_action = Alias(cast(GRT_d, 'a'))
++    P = sticky = Alias(0)
+ 
+     def __init__(self) -> None:
+         self._actual_values: Dict[str, Any] = {}
+diff --git a/kitty/graphics.c b/kitty/graphics.c
+index b8208d11..b780ccb2 100644
+--- a/kitty/graphics.c
++++ b/kitty/graphics.c
+@@ -149,6 +149,9 @@ img_by_client_number(GraphicsManager *self, uint32_t number) {
+ 
+ static void
+ remove_image(GraphicsManager *self, size_t idx) {
++    if (self->images[idx].is_sticky) {
++        self->sticky_images--;
++    }
+     free_image(self, self->images + idx);
+     remove_i_from_array(self->images, idx, self->image_count);
+     self->layers_dirty = true;
+@@ -567,6 +570,10 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
+                 iid = img->client_id;
+             }
+         }
++        if (g->sticky) {
++            img->is_sticky = true;
++            self->sticky_images++;
++        }
+         img->atime = monotonic(); img->used_storage = 0;
+         if (!initialize_load_data(self, g, img, tt, fmt, 0)) return NULL;
+         self->currently_loading.start_command.id = iid;
+@@ -749,7 +756,7 @@ grman_update_layers(GraphicsManager *self, unsigned int scrolled_by, float scree
+     float screen_bottom = screen_top - screen_height;
+     float screen_width_px = num_cols * cell.width;
+     float screen_height_px = num_rows * cell.height;
+-    float y0 = screen_top - dy * scrolled_by;
++    float y0 = screen_top - dy * (self->sticky_images > 0 ? 0 : scrolled_by);
+ 
+     // Iterate over all visible refs and create render data
+     self->count = 0;
+@@ -1411,9 +1418,11 @@ modify_refs(GraphicsManager *self, const void* data, bool (*filter_func)(ImageRe
+ 
+ 
+ static bool
+-scroll_filter_func(ImageRef *ref, Image UNUSED *img, const void *data, CellPixelSize cell UNUSED) {
++scroll_filter_func(ImageRef *ref, Image *img, const void *data, CellPixelSize cell UNUSED) {
+     ScrollData *d = (ScrollData*)data;
+-    ref->start_row += d->amt;
++    if (!img->is_sticky) {
++        ref->start_row += d->amt;
++    }
+     return ref->start_row + (int32_t)ref->effective_num_rows <= d->limit;
+ }
+ 
+@@ -1431,7 +1440,9 @@ static bool
+ scroll_filter_margins_func(ImageRef* ref, Image* img, const void* data, CellPixelSize cell) {
+     ScrollData *d = (ScrollData*)data;
+     if (ref_within_region(ref, d->margin_top, d->margin_bottom)) {
+-        ref->start_row += d->amt;
++        if (!img->is_sticky) {
++            ref->start_row += d->amt;
++        }
+         if (ref_outside_region(ref, d->margin_top, d->margin_bottom)) return true;
+         // Clip the image if scrolling has resulted in part of it being outside the page area
+         uint32_t clip_amt, clipped_rows;
+diff --git a/kitty/graphics.h b/kitty/graphics.h
+index 55015e88..8f7b91db 100644
+--- a/kitty/graphics.h
++++ b/kitty/graphics.h
+@@ -9,7 +9,7 @@
+ #include "monotonic.h"
+ 
+ typedef struct {
+-    unsigned char action, transmission_type, compressed, delete_action;
++    unsigned char action, transmission_type, compressed, delete_action, sticky;
+     uint32_t format, more, id, image_number, data_sz, data_offset, placement_id, quiet;
+     uint32_t width, height, x_offset, y_offset;
+     union { uint32_t cursor_movement, compose_mode; };
+@@ -57,6 +57,7 @@ typedef struct {
+     size_t used_storage;
+     bool is_drawn;
+     AnimationState animation_state;
++    bool is_sticky;
+     uint32_t max_loops, current_loop;
+     monotonic_t current_frame_shown_at;
+ } Image;
+@@ -103,6 +104,7 @@ typedef struct {
+     LoadData currently_loading;
+     Image *images;
+     size_t count, capacity;
++    size_t sticky_images;
+     ImageRenderData *render_data;
+     bool layers_dirty;
+     // The number of images below MIN_ZINDEX / 2, then the number of refs between MIN_ZINDEX / 2 and -1 inclusive, then the number of refs above 0 inclusive.
+diff --git a/kitty/parse-graphics-command.h b/kitty/parse-graphics-command.h
+index e602d676..a64e341b 100644
+--- a/kitty/parse-graphics-command.h
++++ b/kitty/parse-graphics-command.h
+@@ -40,7 +40,8 @@ static inline void parse_graphics_code(Screen *screen,
+     cell_x_offset = 'X',
+     cell_y_offset = 'Y',
+     z_index = 'z',
+-    cursor_movement = 'C'
++    cursor_movement = 'C',
++    sticky = 'P'
+   };
+ 
+   enum KEYS key = 'a';
+@@ -125,6 +126,9 @@ static inline void parse_graphics_code(Screen *screen,
+       case cursor_movement:
+         value_state = UINT;
+         break;
++      case sticky:
++        value_state = UINT;
++        break;
+       default:
+         REPORT_ERROR("Malformed GraphicsCommand control block, invalid key "
+                      "character: 0x%x",
+@@ -269,6 +273,7 @@ static inline void parse_graphics_code(Screen *screen,
+         U(cell_x_offset);
+         U(cell_y_offset);
+         U(cursor_movement);
++        U(sticky);
+       default:
+         break;
+       }

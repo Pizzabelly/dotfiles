@@ -1,9 +1,20 @@
-@import "colors.css";
+@import "/home/pizza/.config/wofi/colors.css";
+
+#window {
+    color: @fg;
+    background-color: @bg;
+}
 
 #input {
     margin: 0px;
-    border: 0px solid @bg;
+    border: 1px solid @bg;
     background-color: @bg;
+    box-shadow: none;
+}
+
+#input:focus {
+    border: 1px solid @bg;
+    box-shadow: none;
 }
 
 #inner-box {
@@ -27,11 +38,23 @@
 #text {
     margin: 0px 2px 0px 2px;
     color: @fg;
-    font: JetBrainsMono Nerd Font;
+    font: FreeMono;
     font-size: 13px;
 }
 
 #text:selected {
-    background-color: @fg;
+    background-color: @c1;
     color: @bg;
 }
+
+#entry {
+    background-color: @bg;
+    outline-color: @bg;
+}
+
+#entry:selected {
+    background-color: @c1;
+    outline-color: @c1;
+}
+
+

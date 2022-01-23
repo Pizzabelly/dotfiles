@@ -1,0 +1,32 @@
+diff -r bae1c99a465f src/wofi.c
+--- a/src/wofi.c	Mon Feb 22 23:53:57 2021 -0800
++++ b/src/wofi.c	Fri Nov 05 16:00:46 2021 -0400
+@@ -129,6 +129,8 @@
+ 
+ static void nop() {}
+ 
++static gboolean filter_proxy(GtkFlowBoxChild* row);
++
+ static void add_interface(void* data, struct wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
+ 	(void) data;
+ 	if(strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
+@@ -456,7 +458,18 @@
+ 	if(primary_action) {
+ 		box = gtk_expander_get_label_widget(GTK_EXPANDER(box));
+ 	}
+-	execute_action(wofi_property_box_get_property(WOFI_PROPERTY_BOX(box), "mode"), wofi_property_box_get_property(WOFI_PROPERTY_BOX(box), "action"));
++	const gchar *action = wofi_property_box_get_property(WOFI_PROPERTY_BOX(box), "action");
++	bool use_entry = false;
++	switch(matching) {
++	case MATCHING_MODE_CONTAINS:
++	        if (!filter_proxy(row)) {
++	                use_entry = true;
++	        }
++	        break;
++	case MATCHING_MODE_FUZZY:
++	        break;
++	}
++	execute_action(wofi_property_box_get_property(WOFI_PROPERTY_BOX(box), "mode"), use_entry ? filter : action);
+ }
+ 
+ static void expand(GtkExpander* expander, gpointer data) {

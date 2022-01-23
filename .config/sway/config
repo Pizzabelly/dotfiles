@@ -20,18 +20,20 @@ input "1386:890:Wacom_One_by_Wacom_S_Pen" {
 output DP-1 {
   mode 2560x1440@144.000000Hz
   pos 1080 0
-  max_render_time 6
-  bg ~/pics/misc/75293213_p0_waifu2x.jpg fill
+#  pos 0 0
+#  max_render_time 6
+  bg ~/pics/anime/72354655_p0.jpg fill
 }
 
 output HDMI-A-1 {
   mode 1920x1080@60Hz
   pos 0 0
+#  pos 2560 0
   transform 270
-  bg ~/pics/anime/75652224_p0.png fill
+  bg ~/pics/misc/66377510_p0_waifu2x.jpg fill
 }
 
-gaps inner 7
+#gaps inner 6
 
 font pango:monospace 9
 
@@ -40,15 +42,18 @@ default_border pixel 2
 floating_modifier $mod
 
 focus_wrapping yes
-
-bindsym $mod+Return exec kitty
+ 
+bindsym $mod+Return exec kitty -1
 
 bindsym $mod+Shift+q kill
 
-bindsym $mod+d exec ~/.scripts/dmenu-colored
+bindsym $mod+d exec ~/.scripts/dmenu-run-colored
+bindsym $mod+e exec ~/.scripts/dmenu-emoji
 
 bindsym $mod+Shift+s exec --no-startup-id ~/.scripts/screenshot
 bindsym Print exec --no-startup-id ~/.scripts/screenshot full
+
+bindsym $mod+Shift+e exec swaynag -t warning -m 'You pressed the exit shortcut. Do you really want to exit sway? This will end your Wayland session.' -B 'Yes, exit sway' 'swaymsg exit'
 
 bindsym $mod+h focus left
 bindsym $mod+j focus down
@@ -124,9 +129,9 @@ mode "resize" {
 
 bindsym $mod+r mode "resize"
 
-set $bg #221b19
-set $fg #c7c6c5
-set $c2 #c19489
+set $bg #1c140f
+set $fg #c6c1bb
+set $c2 #8C6C53
 set $urgent #2F343A
 
 # class                 border   bground  text  indicator  child_border
@@ -141,24 +146,19 @@ client.background       $bg
 bindsym button4 nop
 bindsym button5 nop
 
-bar {
-  swaybar_command waybar
-}
+#bar {
+#  swaybar_command waybar
+#}
 
 for_window [app_id=mpv] sticky enable, floating enable, border none
-for_window [title="wallpaper2"] {
-  move to scratchpad
-  floating enable
-  border none
-  resize set 2560 1440
-  move position center
-}
+for_window [app_id="kitty_server"] move to scratchpad
+for_window [title="mauri"] floating enable
 
 set $gnome-schema org.gnome.desktop.interface
 
 exec_always {
-    gsettings set $gnome-schema gtk-theme 'oomox-xresources-reverse'
-    gsettings set $gnome-schema icon-theme 'oomox-xresources-reverse'
+    gsettings set $gnome-schema gtk-theme 'oomox-colors-oomox'
+    gsettings set $gnome-schema icon-theme 'oomox-colors-oomox'
     gsettings set $gnome-schema cursor-theme 'Adwaita'
     gsettings set $gnome-schema font-name 'Ubuntu Light 11'
 }

@@ -1,13 +1,12 @@
 #!/bin/bash
 
-if [ "$1" == "windows" ]
-then
-    ddccontrol -r 0x60 -w 17 dev:/dev/i2c-5
+if [ "$1" == "HDMI1" ]; then
+    echo "Switching input to HDMI1..."
+    #ddccontrol -r 0x60 -w 17 dev:/dev/i2c-5
+elif [ "$1" == "HDMI2" ]; then
+    echo "Switching input to HDMI2..."
+    #ddccontrol -r 0x60 -w 17 dev:/dev/i2c-5
+elif [ "$1" == "DP" ]; then
+    echo "Switching input to DP..."
+    #ddccontrol -r 0x60 -w 15 dev:/dev/i2c-5
 fi
-
-if [ "$1" == "linux" ]
-then
-    ddccontrol -r 0x60 -w 15 dev:/dev/i2c-5
-fi
-
-
